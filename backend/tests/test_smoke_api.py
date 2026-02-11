@@ -189,7 +189,63 @@ def test_settings_history_endpoint() -> None:
     assert "changedFields" in entries[0]
 
 
+def test_settings_history_filters_by_actor_and_date() -> None:
+    current_settings_response = client.get("/api/settings")
+    assert current_settings_response.status_code == 200
+    current_settings = current_settings_response.json()
+
+    update_response = client.patch(
+        "/api/settings",
+        json={
+            "allowAutoRetryOnFailedCalls": not current_settings["allowAutoRetryOnFailedCalls"],
+            "auditActor": "history-filter-user",
+            "changeReason": "Verify actor/date filters",
+        },
+    )
+    assert update_response.status_code == 200
+
+    actor_filtered_response = client.get(
+        "/api/settings/history",
+        params={"actor": "history-filter-user", "limit": 10},
+    )
+    assert actor_filtered_response.status_code == 200
+    actor_entries = actor_filtered_response.json()
+    assert len(actor_entries) >= 1
+    assert all(entry["actor"] == "history-filter-user" for entry in actor_entries)
+
+    anchor_entry = actor_entries[0]
+    date_filtered_response = client.get(
+        "/api/settings/history",
+        params={
+            "fromDate": anchor_entry["changedAt"],
+            "toDate": anchor_entry["changedAt"],
+            "limit": 10,
+        },
+    )
+    assert date_filtered_response.status_code == 200
+    date_entries = date_filtered_response.json()
+    assert any(entry["id"] == anchor_entry["id"] for entry in date_entries)
+
+
+def test_settings_history_rejects_invalid_date_range() -> None:
+    response = client.get(
+        "/api/settings/history",
+        params={
+            "fromDate": "2026-02-11T00:00:00Z",
+            "toDate": "2026-02-10T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_update_settings_endpoint() -> None:
+    current_settings_response = client.get("/api/settings")
+    assert current_settings_response.status_code == 200
+    current_settings = current_settings_response.json()
+    next_auto_retry = not current_settings["allowAutoRetryOnFailedCalls"]
+    next_latency_filler = not current_settings["playLatencyFillerPhraseOnTimeout"]
+
     before_response = client.get("/api/settings/history")
     assert before_response.status_code == 200
     before_entries = before_response.json()
@@ -197,8 +253,8 @@ def test_update_settings_endpoint() -> None:
     response = client.patch(
         "/api/settings",
         json={
-            "allowAutoRetryOnFailedCalls": True,
-            "playLatencyFillerPhraseOnTimeout": False,
+            "allowAutoRetryOnFailedCalls": next_auto_retry,
+            "playLatencyFillerPhraseOnTimeout": next_latency_filler,
             "auditActor": "qa-admin",
             "changeReason": "Enable retries for resilience test.",
         },
@@ -206,8 +262,8 @@ def test_update_settings_endpoint() -> None:
 
     assert response.status_code == 200
     settings = response.json()
-    assert settings["allowAutoRetryOnFailedCalls"] is True
-    assert settings["playLatencyFillerPhraseOnTimeout"] is False
+    assert settings["allowAutoRetryOnFailedCalls"] is next_auto_retry
+    assert settings["playLatencyFillerPhraseOnTimeout"] is next_latency_filler
 
     after_response = client.get("/api/settings/history")
     assert after_response.status_code == 200

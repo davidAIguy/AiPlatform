@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from backend.app.api import mock_data
 from backend.app.schemas import (
@@ -17,6 +18,23 @@ def _to_camel(value: str) -> str:
     return parts[0] + "".join(part.capitalize() for part in parts[1:])
 
 
+def _parse_history_timestamp(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Invalid ISO datetime: {value}",
+        ) from exc
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
+
+
 @router.get("", response_model=PlatformSettings)
 def get_platform_settings() -> PlatformSettings:
     return mock_data.PLATFORM_SETTINGS
@@ -25,8 +43,37 @@ def get_platform_settings() -> PlatformSettings:
 @router.get("/history", response_model=list[PlatformSettingsAuditEntry])
 def get_platform_settings_history(
     limit: int = Query(default=20, ge=1, le=100),
+    actor: Optional[str] = Query(default=None),
+    from_date: Optional[str] = Query(default=None, alias="fromDate"),
+    to_date: Optional[str] = Query(default=None, alias="toDate"),
 ) -> list[PlatformSettingsAuditEntry]:
-    return list(reversed(mock_data.SETTINGS_AUDIT_LOG))[:limit]
+    from_ts = _parse_history_timestamp(from_date) if from_date else None
+    to_ts = _parse_history_timestamp(to_date) if to_date else None
+
+    if from_ts and to_ts and from_ts > to_ts:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="fromDate must be less than or equal to toDate",
+        )
+
+    normalized_actor = actor.strip().lower() if actor else None
+    entries: list[PlatformSettingsAuditEntry] = []
+
+    for entry in reversed(mock_data.SETTINGS_AUDIT_LOG):
+        if normalized_actor and entry.actor.strip().lower() != normalized_actor:
+            continue
+
+        changed_at_ts = _parse_history_timestamp(entry.changed_at)
+
+        if from_ts and changed_at_ts < from_ts:
+            continue
+
+        if to_ts and changed_at_ts > to_ts:
+            continue
+
+        entries.append(entry)
+
+    return entries[:limit]
 
 
 @router.patch("", response_model=PlatformSettings)

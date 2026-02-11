@@ -139,8 +139,27 @@ export function updatePlatformSettings(payload: PlatformSettingsUpdateInput) {
   return sendJson<PlatformSettings>('/api/settings', 'PATCH', payload);
 }
 
-export function listPlatformSettingsHistory(limit = 20) {
+export function listPlatformSettingsHistory(filters?: {
+  limit?: number;
+  actor?: string;
+  fromDate?: string;
+  toDate?: string;
+}) {
   const params = new URLSearchParams();
-  params.set('limit', String(limit));
+
+  params.set('limit', String(filters?.limit ?? 20));
+
+  if (filters?.actor) {
+    params.set('actor', filters.actor);
+  }
+
+  if (filters?.fromDate) {
+    params.set('fromDate', filters.fromDate);
+  }
+
+  if (filters?.toDate) {
+    params.set('toDate', filters.toDate);
+  }
+
   return getJson<PlatformSettingsAuditEntry[]>(`/api/settings/history?${params.toString()}`);
 }

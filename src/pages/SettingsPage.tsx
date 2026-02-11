@@ -9,6 +9,7 @@ import {
   Divider,
   FormControlLabel,
   Grid2,
+  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -26,6 +27,14 @@ const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
 const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
 const HISTORY_LIMIT = 8;
 const DEFAULT_AUDIT_ACTOR = 'platform-admin';
+
+function toRangeStart(value: string): string {
+  return `${value}T00:00:00Z`;
+}
+
+function toRangeEnd(value: string): string {
+  return `${value}T23:59:59.999Z`;
+}
 
 interface SettingsValidationErrors {
   openaiApiKey: string | null;
@@ -64,19 +73,39 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [history, setHistory] = useState<PlatformSettingsAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [auditActor, setAuditActor] = useState(DEFAULT_AUDIT_ACTOR);
   const [changeReason, setChangeReason] = useState('');
+  const [historyActorFilter, setHistoryActorFilter] = useState('all');
+  const [historyFromDate, setHistoryFromDate] = useState('');
+  const [historyToDate, setHistoryToDate] = useState('');
 
   const validationErrors = useMemo(() => validateSettingsKeys(settings), [settings]);
   const hasValidationErrors = useMemo(
     () => Object.values(validationErrors).some((value) => value !== null),
     [validationErrors],
   );
+
+  const invalidHistoryDateRange = useMemo(
+    () => historyFromDate.length > 0 && historyToDate.length > 0 && historyFromDate > historyToDate,
+    [historyFromDate, historyToDate],
+  );
+
+  const actorOptions = useMemo(() => {
+    const uniqueActors = Array.from(new Set(history.map((entry) => entry.actor)));
+
+    if (historyActorFilter !== 'all' && !uniqueActors.includes(historyActorFilter)) {
+      return [historyActorFilter, ...uniqueActors];
+    }
+
+    return uniqueActors;
+  }, [history, historyActorFilter]);
 
   useEffect(() => {
     let active = true;
@@ -85,17 +114,13 @@ export function SettingsPage() {
       setLoading(true);
 
       try {
-        const [nextSettings, nextHistory] = await Promise.all([
-          getPlatformSettings(),
-          listPlatformSettingsHistory(HISTORY_LIMIT),
-        ]);
+        const nextSettings = await getPlatformSettings();
 
         if (!active) {
           return;
         }
 
         setSettings(nextSettings);
-        setHistory(nextHistory);
         setLoadError(null);
       } catch (error) {
         if (!active) {
@@ -117,6 +142,54 @@ export function SettingsPage() {
       active = false;
     };
   }, [reloadToken]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadHistory() {
+      if (invalidHistoryDateRange) {
+        setHistory([]);
+        setHistoryError('From date must be before or equal to To date.');
+        setHistoryLoading(false);
+        return;
+      }
+
+      setHistoryLoading(true);
+      setHistoryError(null);
+
+      try {
+        const nextHistory = await listPlatformSettingsHistory({
+          limit: HISTORY_LIMIT,
+          actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
+          fromDate: historyFromDate ? toRangeStart(historyFromDate) : undefined,
+          toDate: historyToDate ? toRangeEnd(historyToDate) : undefined,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        setHistory(nextHistory);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : 'Unexpected error while loading settings history.';
+        setHistoryError(message);
+      } finally {
+        if (active) {
+          setHistoryLoading(false);
+        }
+      }
+    }
+
+    loadHistory();
+
+    return () => {
+      active = false;
+    };
+  }, [reloadToken, historyActorFilter, historyFromDate, historyToDate, invalidHistoryDateRange]);
 
   const integrationRows = useMemo(() => {
     if (!settings) {
@@ -185,9 +258,15 @@ export function SettingsPage() {
         auditActor: auditActor.trim() || DEFAULT_AUDIT_ACTOR,
         changeReason: changeReason.trim() || undefined,
       });
-      const updatedHistory = await listPlatformSettingsHistory(HISTORY_LIMIT);
+      const updatedHistory = await listPlatformSettingsHistory({
+        limit: HISTORY_LIMIT,
+        actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
+        fromDate: invalidHistoryDateRange || !historyFromDate ? undefined : toRangeStart(historyFromDate),
+        toDate: invalidHistoryDateRange || !historyToDate ? undefined : toRangeEnd(historyToDate),
+      });
       setSettings(updated);
       setHistory(updatedHistory);
+      setHistoryError(null);
       setSaveSuccess('Platform settings saved successfully.');
       setChangeReason('');
     } catch (error) {
@@ -377,7 +456,67 @@ export function SettingsPage() {
                     Settings History
                   </Typography>
 
-                  {history.length === 0 ? (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.1}>
+                    <TextField
+                      select
+                      size="small"
+                      label="Actor"
+                      value={historyActorFilter}
+                      onChange={(event) => setHistoryActorFilter(event.target.value)}
+                      sx={{ minWidth: 170 }}
+                    >
+                      <MenuItem value="all">All Actors</MenuItem>
+                      {actorOptions.map((actor) => (
+                        <MenuItem key={actor} value={actor}>
+                          {actor}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+
+                    <TextField
+                      size="small"
+                      type="date"
+                      label="From"
+                      value={historyFromDate}
+                      onChange={(event) => setHistoryFromDate(event.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+
+                    <TextField
+                      size="small"
+                      type="date"
+                      label="To"
+                      value={historyToDate}
+                      onChange={(event) => setHistoryToDate(event.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setHistoryActorFilter('all');
+                        setHistoryFromDate('');
+                        setHistoryToDate('');
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </Stack>
+
+                  {historyLoading ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Loading history...
+                    </Typography>
+                  ) : null}
+
+                  {historyError ? (
+                    <Alert severity="warning" sx={{ py: 0.5 }}>
+                      {historyError}
+                    </Alert>
+                  ) : null}
+
+                  {history.length === 0 && !historyLoading && !historyError ? (
                     <Typography variant="body2" color="text.secondary">
                       No settings updates recorded yet.
                     </Typography>
