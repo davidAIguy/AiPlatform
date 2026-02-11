@@ -205,6 +205,13 @@ class PlatformSettingsUpdate(ApiSchema):
         )
 
 
+class PlatformSettingsAuditEntry(ApiSchema):
+    id: str
+    changed_at: str
+    actor: str
+    changed_fields: list[str]
+
+
 class CallSession(ApiSchema):
     id: str
     agent_name: str

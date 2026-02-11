@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Divider,
   FormControlLabel,
@@ -16,13 +17,14 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { StatusChip } from '../components/common/StatusChip';
-import { getPlatformSettings, updatePlatformSettings } from '../lib/api';
-import { PlatformSettings } from '../types/domain';
+import { getPlatformSettings, listPlatformSettingsHistory, updatePlatformSettings } from '../lib/api';
+import { PlatformSettings, PlatformSettingsAuditEntry } from '../types/domain';
 
 const OPENAI_KEY_PATTERN = /^sk-[A-Za-z0-9*._-]{10,}$/;
 const DEEPGRAM_KEY_PATTERN = /^dg-[A-Za-z0-9*._-]{8,}$/;
 const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
 const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
+const HISTORY_LIMIT = 8;
 
 interface SettingsValidationErrors {
   openaiApiKey: string | null;
@@ -59,6 +61,7 @@ function validateSettingsKeys(settings: PlatformSettings | null): SettingsValida
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [history, setHistory] = useState<PlatformSettingsAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -79,13 +82,17 @@ export function SettingsPage() {
       setLoading(true);
 
       try {
-        const nextSettings = await getPlatformSettings();
+        const [nextSettings, nextHistory] = await Promise.all([
+          getPlatformSettings(),
+          listPlatformSettingsHistory(HISTORY_LIMIT),
+        ]);
 
         if (!active) {
           return;
         }
 
         setSettings(nextSettings);
+        setHistory(nextHistory);
         setLoadError(null);
       } catch (error) {
         if (!active) {
@@ -121,6 +128,26 @@ export function SettingsPage() {
     ] as const;
   }, [settings, validationErrors]);
 
+  const fieldLabels: Record<string, string> = {
+    openaiApiKey: 'OpenAI Key',
+    deepgramApiKey: 'Deepgram Key',
+    twilioAccountSid: 'Twilio SID',
+    rimeApiKey: 'Rime Key',
+    enableBargeInInterruption: 'Barge-in',
+    playLatencyFillerPhraseOnTimeout: 'Latency Filler',
+    allowAutoRetryOnFailedCalls: 'Auto Retry',
+  };
+
+  function formatHistoryDate(value: string): string {
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString();
+  }
+
   function updateField<K extends keyof PlatformSettings>(field: K, value: PlatformSettings[K]) {
     setSettings((current) => {
       if (!current) {
@@ -151,7 +178,9 @@ export function SettingsPage() {
 
     try {
       const updated = await updatePlatformSettings(settings);
+      const updatedHistory = await listPlatformSettingsHistory(HISTORY_LIMIT);
       setSettings(updated);
+      setHistory(updatedHistory);
       setSaveSuccess('Platform settings saved successfully.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected error while saving platform settings.';
@@ -264,9 +293,9 @@ export function SettingsPage() {
             <Card elevation={2}>
               <CardContent>
                 <Stack spacing={1.5}>
-                <Typography variant="overline" color="text.secondary">
-                  Service Status
-                </Typography>
+                  <Typography variant="overline" color="text.secondary">
+                    Service Status
+                  </Typography>
 
                   {integrationRows.map((item) => (
                     <StatusRow key={item.label} label={item.label} tone={item.tone} />
@@ -309,6 +338,41 @@ export function SettingsPage() {
                     }
                     label="Allow auto-retry on failed calls"
                   />
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent>
+                <Stack spacing={1.4}>
+                  <Typography variant="overline" color="text.secondary">
+                    Settings History
+                  </Typography>
+
+                  {history.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No settings updates recorded yet.
+                    </Typography>
+                  ) : null}
+
+                  {history.map((entry) => (
+                    <Stack key={entry.id} spacing={0.8}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatHistoryDate(entry.changedAt)}
+                        </Typography>
+                        <Chip size="small" label={entry.actor} variant="outlined" />
+                      </Stack>
+
+                      <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
+                        {entry.changedFields.map((field) => (
+                          <Chip key={`${entry.id}-${field}`} size="small" label={fieldLabels[field] ?? field} />
+                        ))}
+                      </Stack>
+
+                      <Divider />
+                    </Stack>
+                  ))}
                 </Stack>
               </CardContent>
             </Card>

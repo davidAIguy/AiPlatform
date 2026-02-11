@@ -6,6 +6,7 @@ import {
   DashboardOverview,
   Organization,
   PlatformSettings,
+  PlatformSettingsAuditEntry,
   PlatformSettingsUpdateInput,
 } from '../types/domain';
 
@@ -136,4 +137,10 @@ export function getPlatformSettings() {
 
 export function updatePlatformSettings(payload: PlatformSettingsUpdateInput) {
   return sendJson<PlatformSettings>('/api/settings', 'PATCH', payload);
+}
+
+export function listPlatformSettingsHistory(limit = 20) {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  return getJson<PlatformSettingsAuditEntry[]>(`/api/settings/history?${params.toString()}`);
 }

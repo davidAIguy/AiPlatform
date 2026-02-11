@@ -3,6 +3,7 @@ from backend.app.schemas import (
     CallSession,
     Organization,
     PlatformSettings,
+    PlatformSettingsAuditEntry,
     RecentSession,
     UsagePoint,
 )
@@ -188,3 +189,21 @@ PLATFORM_SETTINGS = PlatformSettings(
     play_latency_filler_phrase_on_timeout=True,
     allow_auto_retry_on_failed_calls=False,
 )
+
+
+SETTINGS_AUDIT_LOG: list[PlatformSettingsAuditEntry] = [
+    PlatformSettingsAuditEntry(
+        id="settings-audit-1",
+        changed_at="2026-02-10T09:00:00Z",
+        actor="system-bootstrap",
+        changed_fields=[
+            "openaiApiKey",
+            "deepgramApiKey",
+            "twilioAccountSid",
+            "rimeApiKey",
+            "enableBargeInInterruption",
+            "playLatencyFillerPhraseOnTimeout",
+            "allowAutoRetryOnFailedCalls",
+        ],
+    )
+]

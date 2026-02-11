@@ -29,11 +29,13 @@ All domain endpoints are currently in-memory scaffolds under `/api`:
 - `GET /api/dashboard/usage`
 - `GET /api/settings`
 - `PATCH /api/settings`
+- `GET /api/settings/history`
 
 Notes:
 
 - Agent create/update payloads now persist both `prompt` and `promptVersion`.
 - Settings keys are validated on update (`sk-` OpenAI, `dg-` Deepgram, `AC` Twilio SID, `rm-` Rime).
+- Settings history is tracked in-memory with changed field names and timestamp.
 
 Quick check:
 

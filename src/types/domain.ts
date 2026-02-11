@@ -103,3 +103,10 @@ export interface PlatformSettingsUpdateInput {
   playLatencyFillerPhraseOnTimeout?: boolean;
   allowAutoRetryOnFailedCalls?: boolean;
 }
+
+export interface PlatformSettingsAuditEntry {
+  id: string;
+  changedAt: string;
+  actor: string;
+  changedFields: string[];
+}

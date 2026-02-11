@@ -179,7 +179,21 @@ def test_settings_endpoint() -> None:
     assert "enableBargeInInterruption" in settings
 
 
+def test_settings_history_endpoint() -> None:
+    response = client.get("/api/settings/history", params={"limit": 5})
+
+    assert response.status_code == 200
+    entries = response.json()
+    assert len(entries) >= 1
+    assert "changedAt" in entries[0]
+    assert "changedFields" in entries[0]
+
+
 def test_update_settings_endpoint() -> None:
+    before_response = client.get("/api/settings/history")
+    assert before_response.status_code == 200
+    before_entries = before_response.json()
+
     response = client.patch(
         "/api/settings",
         json={
@@ -192,6 +206,15 @@ def test_update_settings_endpoint() -> None:
     settings = response.json()
     assert settings["allowAutoRetryOnFailedCalls"] is True
     assert settings["playLatencyFillerPhraseOnTimeout"] is False
+
+    after_response = client.get("/api/settings/history")
+    assert after_response.status_code == 200
+    after_entries = after_response.json()
+    assert len(after_entries) == len(before_entries) + 1
+
+    latest_entry = after_entries[0]
+    assert "allowAutoRetryOnFailedCalls" in latest_entry["changedFields"]
+    assert "playLatencyFillerPhraseOnTimeout" in latest_entry["changedFields"]
 
 
 def test_update_settings_rejects_invalid_keys() -> None:
