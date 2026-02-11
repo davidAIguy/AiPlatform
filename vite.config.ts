@@ -14,9 +14,13 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: ['.up.railway.app', 'localhost', '127.0.0.1'],
     proxy: {
       '/api': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
     },
+  },
+  preview: {
+    allowedHosts: ['.up.railway.app', 'localhost', '127.0.0.1'],
   },
 });
