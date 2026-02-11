@@ -10,17 +10,51 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { login } from '../lib/api';
+import { isAuthenticated, setAuthSession } from '../lib/auth';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('admin@voicenexus.ai');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    navigate('/dashboard');
+    setSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await login({
+        email: email.trim(),
+        password,
+      });
+      setAuthSession(response.accessToken, response.role);
+      const redirectPath =
+        typeof location.state === 'object' &&
+        location.state !== null &&
+        'from' in location.state &&
+        typeof location.state.from === 'string'
+          ? location.state.from
+          : '/dashboard';
+
+      navigate(redirectPath, { replace: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to sign in. Please try again.';
+      setErrorMessage(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -45,8 +79,10 @@ export function LoginPage() {
             </Stack>
 
             <Alert severity="info" variant="outlined">
-              Demo login for MVP frontend only.
+              Demo credentials: admin@voicenexus.ai / admin123
             </Alert>
+
+            {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 
             <TextField
               label="Work Email"
@@ -70,8 +106,8 @@ export function LoginPage() {
               }}
             />
 
-            <Button type="submit" variant="contained" size="large">
-              Continue to Dashboard
+            <Button type="submit" variant="contained" size="large" disabled={submitting}>
+              {submitting ? 'Signing In...' : 'Continue to Dashboard'}
             </Button>
           </Stack>
         </CardContent>

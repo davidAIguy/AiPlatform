@@ -4,12 +4,15 @@ import {
   AgentUpdateInput,
   CallSession,
   DashboardOverview,
+  LoginInput,
+  LoginResponse,
   Organization,
   PlatformSettings,
   PlatformSettingsAuditEntry,
   PlatformSettingsHistoryMeta,
   PlatformSettingsUpdateInput,
 } from '../types/domain';
+import { getAccessToken } from './auth';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
@@ -33,8 +36,22 @@ async function toRequestError(response: Response): Promise<Error> {
   return new Error(detailMessage || fallback);
 }
 
+function buildAuthHeaders(): HeadersInit {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: buildAuthHeaders(),
+  });
 
   if (!response.ok) {
     throw await toRequestError(response);
@@ -44,9 +61,12 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 async function sendJson<T>(path: string, method: 'POST' | 'PATCH', payload: unknown): Promise<T> {
+  const authHeaders = buildAuthHeaders();
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
+      ...authHeaders,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
@@ -62,6 +82,7 @@ async function sendJson<T>(path: string, method: 'POST' | 'PATCH', payload: unkn
 async function deleteJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'DELETE',
+    headers: buildAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -80,6 +101,10 @@ export function listOrganizations(subscriptionStatus?: Organization['subscriptio
 
   const query = params.toString();
   return getJson<Organization[]>(`/api/organizations${query ? `?${query}` : ''}`);
+}
+
+export function login(payload: LoginInput) {
+  return sendJson<LoginResponse>('/api/auth/login', 'POST', payload);
 }
 
 export function listAgents(filters?: { status?: Agent['status']; organizationName?: string }) {

@@ -7,6 +7,18 @@ class Settings(BaseSettings):
     app_name: str = "orchestrator-api"
     environment: str = "development"
     debug: bool = True
+    database_url: str = "sqlite:///backend/data/app.db"
+
+    auth_enabled: bool = True
+    admin_email: str = "admin@voicenexus.ai"
+    admin_password: str = "admin123"
+    editor_email: str = "operator@voicenexus.ai"
+    editor_password: str = "operator123"
+    viewer_email: str = "viewer@voicenexus.ai"
+    viewer_password: str = "viewer123"
+    admin_api_token: str = "dev-admin-token"
+    editor_api_token: str = "dev-editor-token"
+    viewer_api_token: str = "dev-viewer-token"
 
     model_config = SettingsConfigDict(
         env_file=".env",

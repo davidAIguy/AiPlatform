@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { StatusChip } from '../components/common/StatusChip';
+import { getUserRole } from '../lib/auth';
 import {
   getPlatformSettings,
   getPlatformSettingsHistoryMeta,
@@ -89,6 +90,7 @@ function validateSettingsKeys(settings: PlatformSettings | null): SettingsValida
 }
 
 export function SettingsPage() {
+  const canEditSettings = getUserRole() !== 'viewer';
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [history, setHistory] = useState<PlatformSettingsAuditEntry[]>([]);
   const [historyMeta, setHistoryMeta] = useState<PlatformSettingsHistoryMeta | null>(null);
@@ -290,6 +292,12 @@ export function SettingsPage() {
       return;
     }
 
+    if (!canEditSettings) {
+      setSaveSuccess(null);
+      setSaveError('Your role is read-only for platform settings.');
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
@@ -341,12 +349,18 @@ export function SettingsPage() {
           variant="contained"
           startIcon={<SaveRoundedIcon />}
           onClick={handleSave}
-          disabled={loading || saving || !settings || hasValidationErrors}
+          disabled={loading || saving || !settings || hasValidationErrors || !canEditSettings}
         >
           Save Changes
         </Button>
       }
     >
+      {!canEditSettings ? (
+        <Alert severity="info" sx={{ mb: 2.2 }}>
+          You are signed in as viewer. Settings are read-only.
+        </Alert>
+      ) : null}
+
       {loading ? (
         <Stack alignItems="center" justifyContent="center" py={4}>
           <CircularProgress size={28} />

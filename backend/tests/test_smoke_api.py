@@ -1,9 +1,24 @@
 from fastapi.testclient import TestClient
 
+from backend.app.db import initialize_database
 from backend.app.main import app
 
 
+initialize_database()
 client = TestClient(app)
+
+
+def login_headers(email: str = "admin@voicenexus.ai", password: str = "admin123") -> dict[str, str]:
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
+    assert response.status_code == 200
+    token = response.json()["accessToken"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_health_endpoint() -> None:
@@ -170,8 +185,34 @@ def test_dashboard_usage_endpoint() -> None:
     assert "minutes" in usage[0]
 
 
+def test_auth_login_endpoint() -> None:
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "admin@voicenexus.ai",
+            "password": "admin123",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "accessToken" in payload
+    assert payload["role"] == "admin"
+
+
+def test_settings_patch_requires_auth() -> None:
+    response = client.patch(
+        "/api/settings",
+        json={
+            "allowAutoRetryOnFailedCalls": True,
+        },
+    )
+
+    assert response.status_code == 401
+
+
 def test_settings_endpoint() -> None:
-    response = client.get("/api/settings")
+    response = client.get("/api/settings", headers=login_headers(email="viewer@voicenexus.ai", password="viewer123"))
 
     assert response.status_code == 200
     settings = response.json()
@@ -180,7 +221,11 @@ def test_settings_endpoint() -> None:
 
 
 def test_settings_history_endpoint() -> None:
-    response = client.get("/api/settings/history", params={"limit": 5})
+    response = client.get(
+        "/api/settings/history",
+        params={"limit": 5},
+        headers=login_headers(email="viewer@voicenexus.ai", password="viewer123"),
+    )
 
     assert response.status_code == 200
     entries = response.json()
@@ -190,7 +235,10 @@ def test_settings_history_endpoint() -> None:
 
 
 def test_settings_history_meta_endpoint() -> None:
-    response = client.get("/api/settings/history/meta")
+    response = client.get(
+        "/api/settings/history/meta",
+        headers=login_headers(email="viewer@voicenexus.ai", password="viewer123"),
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -202,7 +250,9 @@ def test_settings_history_meta_endpoint() -> None:
 
 
 def test_settings_history_filters_by_actor_and_date() -> None:
-    current_settings_response = client.get("/api/settings")
+    admin_headers = login_headers()
+
+    current_settings_response = client.get("/api/settings", headers=admin_headers)
     assert current_settings_response.status_code == 200
     current_settings = current_settings_response.json()
 
@@ -213,12 +263,14 @@ def test_settings_history_filters_by_actor_and_date() -> None:
             "auditActor": "history-filter-user",
             "changeReason": "Verify actor/date filters",
         },
+        headers=admin_headers,
     )
     assert update_response.status_code == 200
 
     actor_filtered_response = client.get(
         "/api/settings/history",
         params={"actor": "history-filter-user", "limit": 10},
+        headers=admin_headers,
     )
     assert actor_filtered_response.status_code == 200
     actor_entries = actor_filtered_response.json()
@@ -231,6 +283,7 @@ def test_settings_history_filters_by_actor_and_date() -> None:
             "changedField": "allowAutoRetryOnFailedCalls",
             "limit": 10,
         },
+        headers=admin_headers,
     )
     assert changed_field_response.status_code == 200
     changed_field_entries = changed_field_response.json()
@@ -248,6 +301,7 @@ def test_settings_history_filters_by_actor_and_date() -> None:
             "toDate": anchor_entry["changedAt"],
             "limit": 10,
         },
+        headers=admin_headers,
     )
     assert date_filtered_response.status_code == 200
     date_entries = date_filtered_response.json()
@@ -259,6 +313,7 @@ def test_settings_history_filters_by_actor_and_date() -> None:
             "limit": 1,
             "offset": 1,
         },
+        headers=admin_headers,
     )
     assert paged_response.status_code == 200
     paged_entries = paged_response.json()
@@ -266,25 +321,30 @@ def test_settings_history_filters_by_actor_and_date() -> None:
 
 
 def test_settings_history_rejects_invalid_date_range() -> None:
+    admin_headers = login_headers()
+
     response = client.get(
         "/api/settings/history",
         params={
             "fromDate": "2026-02-11T00:00:00Z",
             "toDate": "2026-02-10T00:00:00Z",
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 422
 
 
 def test_update_settings_endpoint() -> None:
-    current_settings_response = client.get("/api/settings")
+    admin_headers = login_headers()
+
+    current_settings_response = client.get("/api/settings", headers=admin_headers)
     assert current_settings_response.status_code == 200
     current_settings = current_settings_response.json()
     next_auto_retry = not current_settings["allowAutoRetryOnFailedCalls"]
     next_latency_filler = not current_settings["playLatencyFillerPhraseOnTimeout"]
 
-    before_response = client.get("/api/settings/history")
+    before_response = client.get("/api/settings/history", headers=admin_headers)
     assert before_response.status_code == 200
     before_entries = before_response.json()
 
@@ -296,6 +356,7 @@ def test_update_settings_endpoint() -> None:
             "auditActor": "qa-admin",
             "changeReason": "Enable retries for resilience test.",
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -303,7 +364,7 @@ def test_update_settings_endpoint() -> None:
     assert settings["allowAutoRetryOnFailedCalls"] is next_auto_retry
     assert settings["playLatencyFillerPhraseOnTimeout"] is next_latency_filler
 
-    after_response = client.get("/api/settings/history")
+    after_response = client.get("/api/settings/history", headers=admin_headers)
     assert after_response.status_code == 200
     after_entries = after_response.json()
     assert len(after_entries) == len(before_entries) + 1
@@ -316,11 +377,13 @@ def test_update_settings_endpoint() -> None:
 
 
 def test_update_settings_without_changes_does_not_append_history() -> None:
-    baseline_response = client.get("/api/settings")
+    admin_headers = login_headers()
+
+    baseline_response = client.get("/api/settings", headers=admin_headers)
     assert baseline_response.status_code == 200
     baseline_settings = baseline_response.json()
 
-    before_history_response = client.get("/api/settings/history")
+    before_history_response = client.get("/api/settings/history", headers=admin_headers)
     assert before_history_response.status_code == 200
     before_entries = before_history_response.json()
 
@@ -331,10 +394,11 @@ def test_update_settings_without_changes_does_not_append_history() -> None:
             "auditActor": "qa-admin",
             "changeReason": "No-op verification",
         },
+        headers=admin_headers,
     )
     assert update_response.status_code == 200
 
-    after_history_response = client.get("/api/settings/history")
+    after_history_response = client.get("/api/settings/history", headers=admin_headers)
     assert after_history_response.status_code == 200
     after_entries = after_history_response.json()
 
@@ -342,11 +406,14 @@ def test_update_settings_without_changes_does_not_append_history() -> None:
 
 
 def test_update_settings_rejects_invalid_keys() -> None:
+    admin_headers = login_headers()
+
     response = client.patch(
         "/api/settings",
         json={
             "openaiApiKey": "invalid-key",
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 422

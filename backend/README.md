@@ -20,6 +20,7 @@ curl http://localhost:8000/health
 All domain endpoints are currently in-memory scaffolds under `/api`:
 
 - `GET /api/organizations`
+- `POST /api/auth/login`
 - `GET /api/agents`
 - `POST /api/agents`
 - `PATCH /api/agents/{agent_id}`
@@ -34,9 +35,11 @@ All domain endpoints are currently in-memory scaffolds under `/api`:
 
 Notes:
 
+- Settings and settings history now persist in SQLite (`DATABASE_URL`) instead of in-memory only.
+- Auth uses bearer tokens from `/api/auth/login` and role checks (viewer/editor/admin) for settings endpoints.
 - Agent create/update payloads now persist both `prompt` and `promptVersion`.
 - Settings keys are validated on update (`sk-` OpenAI, `dg-` Deepgram, `AC` Twilio SID, `rm-` Rime).
-- Settings history is tracked in-memory with changed field names and timestamp.
+- Settings history is stored in SQLite with changed field names and timestamp.
 - Settings updates can include `auditActor` and `changeReason`, which are stored in history.
 - Settings history supports pagination/filter query params: `limit`, `offset`, `actor`, `fromDate`, `toDate`, and `changedField`.
 - Settings history metadata endpoint returns available actors/fields plus totals for richer filter UIs.
@@ -45,6 +48,14 @@ Quick check:
 
 ```bash
 curl http://localhost:8000/api/dashboard/overview
+```
+
+Auth quick check:
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@voicenexus.ai","password":"admin123"}'
 ```
 
 Run API smoke tests:
@@ -58,4 +69,11 @@ Run all project checks from repo root:
 
 ```bash
 npm run check
+```
+
+Run end-to-end browser checks (Playwright):
+
+```bash
+npx playwright install chromium
+npm run e2e
 ```

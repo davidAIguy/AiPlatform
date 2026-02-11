@@ -223,6 +223,17 @@ class PlatformSettingsHistoryMeta(ApiSchema):
     latest_changed_at: Optional[str] = None
 
 
+class AuthLoginRequest(ApiSchema):
+    email: str
+    password: str
+
+
+class AuthLoginResponse(ApiSchema):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+
+
 class CallSession(ApiSchema):
     id: str
     agent_name: str

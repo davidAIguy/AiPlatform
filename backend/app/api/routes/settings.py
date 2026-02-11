@@ -1,15 +1,19 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc, func
+from sqlalchemy.orm import Session
 
 from backend.app.api import mock_data
+from backend.app.db import PlatformSettingsRecord, SettingsAuditRecord, get_db
 from backend.app.schemas import (
     PlatformSettings,
     PlatformSettingsAuditEntry,
     PlatformSettingsHistoryMeta,
     PlatformSettingsUpdate,
 )
+from backend.app.security import require_roles
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -36,17 +40,76 @@ def _parse_history_timestamp(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _to_iso_utc(value: datetime) -> str:
+    if value.tzinfo is None:
+        normalized = value.replace(tzinfo=timezone.utc)
+    else:
+        normalized = value.astimezone(timezone.utc)
+
+    return normalized.isoformat().replace("+00:00", "Z")
+
+
+def _ensure_settings_record(db: Session) -> PlatformSettingsRecord:
+    record = db.query(PlatformSettingsRecord).first()
+
+    if record is not None:
+        return record
+
+    seeded = mock_data.PLATFORM_SETTINGS
+    record = PlatformSettingsRecord(
+        id=1,
+        openai_api_key=seeded.openai_api_key,
+        deepgram_api_key=seeded.deepgram_api_key,
+        twilio_account_sid=seeded.twilio_account_sid,
+        rime_api_key=seeded.rime_api_key,
+        enable_barge_in_interruption=seeded.enable_barge_in_interruption,
+        play_latency_filler_phrase_on_timeout=seeded.play_latency_filler_phrase_on_timeout,
+        allow_auto_retry_on_failed_calls=seeded.allow_auto_retry_on_failed_calls,
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def _settings_record_to_schema(record: PlatformSettingsRecord) -> PlatformSettings:
+    return PlatformSettings(
+        openai_api_key=record.openai_api_key,
+        deepgram_api_key=record.deepgram_api_key,
+        twilio_account_sid=record.twilio_account_sid,
+        rime_api_key=record.rime_api_key,
+        enable_barge_in_interruption=record.enable_barge_in_interruption,
+        play_latency_filler_phrase_on_timeout=record.play_latency_filler_phrase_on_timeout,
+        allow_auto_retry_on_failed_calls=record.allow_auto_retry_on_failed_calls,
+    )
+
+
+def _audit_record_to_schema(record: SettingsAuditRecord) -> PlatformSettingsAuditEntry:
+    return PlatformSettingsAuditEntry(
+        id=record.event_id,
+        changed_at=_to_iso_utc(record.changed_at),
+        actor=record.actor,
+        reason=record.reason,
+        changed_fields=list(record.changed_fields or []),
+    )
+
+
 def _filter_history_entries(
+    db: Session,
     actor: Optional[str],
     changed_field: Optional[str],
     from_ts: Optional[datetime],
     to_ts: Optional[datetime],
 ) -> list[PlatformSettingsAuditEntry]:
+    rows = db.query(SettingsAuditRecord).order_by(desc(SettingsAuditRecord.changed_at)).all()
     normalized_actor = actor.strip().lower() if actor else None
     normalized_changed_field = changed_field.strip().lower() if changed_field else None
     entries: list[PlatformSettingsAuditEntry] = []
 
-    for entry in reversed(mock_data.SETTINGS_AUDIT_LOG):
+    for row in rows:
+        entry = _audit_record_to_schema(row)
+
         if normalized_actor and entry.actor.strip().lower() != normalized_actor:
             continue
 
@@ -70,8 +133,12 @@ def _filter_history_entries(
 
 
 @router.get("", response_model=PlatformSettings)
-def get_platform_settings() -> PlatformSettings:
-    return mock_data.PLATFORM_SETTINGS
+def get_platform_settings(
+    _: str = Depends(require_roles(["admin", "editor", "viewer"])),
+    db: Session = Depends(get_db),
+) -> PlatformSettings:
+    record = _ensure_settings_record(db)
+    return _settings_record_to_schema(record)
 
 
 @router.get("/history", response_model=list[PlatformSettingsAuditEntry])
@@ -82,6 +149,8 @@ def get_platform_settings_history(
     from_date: Optional[str] = Query(default=None, alias="fromDate"),
     to_date: Optional[str] = Query(default=None, alias="toDate"),
     changed_field: Optional[str] = Query(default=None, alias="changedField"),
+    _: str = Depends(require_roles(["admin", "editor", "viewer"])),
+    db: Session = Depends(get_db),
 ) -> list[PlatformSettingsAuditEntry]:
     from_ts = _parse_history_timestamp(from_date) if from_date else None
     to_ts = _parse_history_timestamp(to_date) if to_date else None
@@ -92,7 +161,7 @@ def get_platform_settings_history(
             detail="fromDate must be less than or equal to toDate",
         )
 
-    entries = _filter_history_entries(actor, changed_field, from_ts, to_ts)
+    entries = _filter_history_entries(db, actor, changed_field, from_ts, to_ts)
 
     return entries[offset : offset + limit]
 
@@ -101,6 +170,8 @@ def get_platform_settings_history(
 def get_platform_settings_history_meta(
     from_date: Optional[str] = Query(default=None, alias="fromDate"),
     to_date: Optional[str] = Query(default=None, alias="toDate"),
+    _: str = Depends(require_roles(["admin", "editor", "viewer"])),
+    db: Session = Depends(get_db),
 ) -> PlatformSettingsHistoryMeta:
     from_ts = _parse_history_timestamp(from_date) if from_date else None
     to_ts = _parse_history_timestamp(to_date) if to_date else None
@@ -112,6 +183,7 @@ def get_platform_settings_history_meta(
         )
 
     entries = _filter_history_entries(
+        db,
         actor=None,
         changed_field=None,
         from_ts=from_ts,
@@ -135,7 +207,12 @@ def get_platform_settings_history_meta(
 
 
 @router.patch("", response_model=PlatformSettings)
-def update_platform_settings(payload: PlatformSettingsUpdate) -> PlatformSettings:
+def update_platform_settings(
+    payload: PlatformSettingsUpdate,
+    _: str = Depends(require_roles(["admin", "editor"])),
+    db: Session = Depends(get_db),
+) -> PlatformSettings:
+    record = _ensure_settings_record(db)
     updates = payload.model_dump(exclude_unset=True)
     actor = (updates.pop("audit_actor", None) or "platform-admin").strip() or "platform-admin"
     reason = updates.pop("change_reason", None)
@@ -144,22 +221,27 @@ def update_platform_settings(payload: PlatformSettingsUpdate) -> PlatformSetting
     changed_fields = [
         field
         for field, value in updates.items()
-        if getattr(mock_data.PLATFORM_SETTINGS, field) != value
+        if hasattr(record, field) and getattr(record, field) != value
     ]
 
     if changed_fields:
-        mock_data.PLATFORM_SETTINGS = mock_data.PLATFORM_SETTINGS.model_copy(update=updates)
-        next_entry_id = f"settings-audit-{len(mock_data.SETTINGS_AUDIT_LOG) + 1}"
-        mock_data.SETTINGS_AUDIT_LOG.append(
-            PlatformSettingsAuditEntry(
-                id=next_entry_id,
-                changed_at=datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+        for field in changed_fields:
+            setattr(record, field, updates[field])
+
+        record.updated_at = datetime.now(timezone.utc)
+
+        next_entry_id = f"settings-audit-{(db.query(func.count(SettingsAuditRecord.id)).scalar() or 0) + 1}"
+        db.add(
+            SettingsAuditRecord(
+                event_id=next_entry_id,
+                changed_at=datetime.now(timezone.utc),
                 actor=actor,
                 reason=normalized_reason,
                 changed_fields=[_to_camel(field) for field in changed_fields],
             )
         )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
 
-    return mock_data.PLATFORM_SETTINGS
+    return _settings_record_to_schema(record)

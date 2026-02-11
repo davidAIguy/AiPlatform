@@ -2,12 +2,14 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
 import CallRoundedIcon from '@mui/icons-material/CallRounded';
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import SupportAgentRoundedIcon from '@mui/icons-material/SupportAgentRounded';
 import { Avatar, Box, IconButton, Paper, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { clearAuthSession } from '../../lib/auth';
 
 interface NavItem {
   label: string;
@@ -27,6 +29,11 @@ export function NavigationRail() {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+
+  function handleLogout() {
+    clearAuthSession();
+    navigate('/login');
+  }
 
   const navButtonStyles = {
     borderRadius: 6,
@@ -130,6 +137,18 @@ export function NavigationRail() {
             <SettingsRoundedIcon />
           </IconButton>
 
+          <IconButton
+            aria-label="logout"
+            onClick={handleLogout}
+            sx={{
+              width: 42,
+              height: 42,
+              color: theme.palette.text.secondary,
+            }}
+          >
+            <LogoutRoundedIcon />
+          </IconButton>
+
           <Avatar sx={{ width: 32, height: 32, fontSize: '0.78rem', fontWeight: 700 }}>AD</Avatar>
         </Stack>
       </Paper>
@@ -178,6 +197,21 @@ export function NavigationRail() {
             </IconButton>
           );
         })}
+
+        <IconButton
+          aria-label="Logout"
+          onClick={handleLogout}
+          sx={{
+            minWidth: 72,
+            borderRadius: 4,
+            color: theme.palette.text.secondary,
+            flexDirection: 'column',
+            px: 1,
+          }}
+        >
+          <LogoutRoundedIcon />
+          <Typography variant="caption">Logout</Typography>
+        </IconButton>
       </Stack>
     </Paper>
   );
