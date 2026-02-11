@@ -1,4 +1,11 @@
-from backend.app.schemas import Agent, CallSession, Organization, RecentSession, UsagePoint
+from backend.app.schemas import (
+    Agent,
+    CallSession,
+    Organization,
+    PlatformSettings,
+    RecentSession,
+    UsagePoint,
+)
 
 ORGANIZATIONS: list[Organization] = [
     Organization(
@@ -170,3 +177,14 @@ RECENT_SESSIONS: list[RecentSession] = [
         status="Completed",
     ),
 ]
+
+
+PLATFORM_SETTINGS = PlatformSettings(
+    openai_api_key="sk-live-*********************",
+    deepgram_api_key="dg-live-*********************",
+    twilio_account_sid="AC*********************",
+    rime_api_key="rm-live-*********************",
+    enable_barge_in_interruption=True,
+    play_latency_filler_phrase_on_timeout=True,
+    allow_auto_retry_on_failed_calls=False,
+)

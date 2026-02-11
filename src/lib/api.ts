@@ -1,4 +1,13 @@
-import { Agent, AgentCreateInput, AgentUpdateInput, CallSession, DashboardOverview, Organization } from '../types/domain';
+import {
+  Agent,
+  AgentCreateInput,
+  AgentUpdateInput,
+  CallSession,
+  DashboardOverview,
+  Organization,
+  PlatformSettings,
+  PlatformSettingsUpdateInput,
+} from '../types/domain';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
@@ -99,4 +108,12 @@ export function listCalls(filters?: { status?: CallSession['status']; agentName?
 
 export function getDashboardOverview() {
   return getJson<DashboardOverview>('/api/dashboard/overview');
+}
+
+export function getPlatformSettings() {
+  return getJson<PlatformSettings>('/api/settings');
+}
+
+export function updatePlatformSettings(payload: PlatformSettingsUpdateInput) {
+  return sendJson<PlatformSettings>('/api/settings', 'PATCH', payload);
 }

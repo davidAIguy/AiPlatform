@@ -88,6 +88,26 @@ class AgentUpdate(ApiSchema):
     average_latency_ms: Optional[int] = None
 
 
+class PlatformSettings(ApiSchema):
+    openai_api_key: str
+    deepgram_api_key: str
+    twilio_account_sid: str
+    rime_api_key: str
+    enable_barge_in_interruption: bool
+    play_latency_filler_phrase_on_timeout: bool
+    allow_auto_retry_on_failed_calls: bool
+
+
+class PlatformSettingsUpdate(ApiSchema):
+    openai_api_key: Optional[str] = None
+    deepgram_api_key: Optional[str] = None
+    twilio_account_sid: Optional[str] = None
+    rime_api_key: Optional[str] = None
+    enable_barge_in_interruption: Optional[bool] = None
+    play_latency_filler_phrase_on_timeout: Optional[bool] = None
+    allow_auto_retry_on_failed_calls: Optional[bool] = None
+
+
 class CallSession(ApiSchema):
     id: str
     agent_name: str

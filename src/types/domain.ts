@@ -83,3 +83,23 @@ export interface DashboardOverview {
   usageByDay: UsagePoint[];
   recentSessions: RecentSession[];
 }
+
+export interface PlatformSettings {
+  openaiApiKey: string;
+  deepgramApiKey: string;
+  twilioAccountSid: string;
+  rimeApiKey: string;
+  enableBargeInInterruption: boolean;
+  playLatencyFillerPhraseOnTimeout: boolean;
+  allowAutoRetryOnFailedCalls: boolean;
+}
+
+export interface PlatformSettingsUpdateInput {
+  openaiApiKey?: string;
+  deepgramApiKey?: string;
+  twilioAccountSid?: string;
+  rimeApiKey?: string;
+  enableBargeInInterruption?: boolean;
+  playLatencyFillerPhraseOnTimeout?: boolean;
+  allowAutoRetryOnFailedCalls?: boolean;
+}

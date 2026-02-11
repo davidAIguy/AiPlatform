@@ -168,3 +168,27 @@ def test_dashboard_usage_endpoint() -> None:
     assert len(usage) == 7
     assert "day" in usage[0]
     assert "minutes" in usage[0]
+
+
+def test_settings_endpoint() -> None:
+    response = client.get("/api/settings")
+
+    assert response.status_code == 200
+    settings = response.json()
+    assert "openaiApiKey" in settings
+    assert "enableBargeInInterruption" in settings
+
+
+def test_update_settings_endpoint() -> None:
+    response = client.patch(
+        "/api/settings",
+        json={
+            "allowAutoRetryOnFailedCalls": True,
+            "playLatencyFillerPhraseOnTimeout": False,
+        },
+    )
+
+    assert response.status_code == 200
+    settings = response.json()
+    assert settings["allowAutoRetryOnFailedCalls"] is True
+    assert settings["playLatencyFillerPhraseOnTimeout"] is False

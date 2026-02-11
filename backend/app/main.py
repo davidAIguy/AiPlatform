@@ -6,6 +6,7 @@ from backend.app.api.routes import (
     dashboard_router,
     health_router,
     organizations_router,
+    settings_router,
 )
 from backend.app.core.settings import get_settings
 
@@ -21,3 +22,4 @@ app.include_router(organizations_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(calls_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")

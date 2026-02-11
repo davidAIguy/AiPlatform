@@ -27,6 +27,8 @@ All domain endpoints are currently in-memory scaffolds under `/api`:
 - `GET /api/calls`
 - `GET /api/dashboard/overview`
 - `GET /api/dashboard/usage`
+- `GET /api/settings`
+- `PATCH /api/settings`
 
 Notes:
 
