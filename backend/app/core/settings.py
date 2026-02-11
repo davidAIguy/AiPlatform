@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     editor_api_token: str = "dev-editor-token"
     viewer_api_token: str = "dev-viewer-token"
 
+    openai_api_key: str = ""
+    deepgram_api_key: str = ""
+    twilio_account_sid: str = ""
+    rime_api_key: str = ""
+
     def parsed_cors_origins(self) -> list[str]:
         origins = [item.strip() for item in self.cors_allow_origins.split(",") if item.strip()]
 

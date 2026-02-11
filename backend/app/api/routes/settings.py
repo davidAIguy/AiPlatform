@@ -16,6 +16,12 @@ from backend.app.schemas import (
 from backend.app.security import require_roles
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+SENSITIVE_SETTINGS_FIELDS = {
+    "openai_api_key",
+    "deepgram_api_key",
+    "twilio_account_sid",
+    "rime_api_key",
+}
 
 
 def _to_camel(value: str) -> str:
@@ -83,6 +89,10 @@ def _settings_record_to_schema(record: PlatformSettingsRecord) -> PlatformSettin
         play_latency_filler_phrase_on_timeout=record.play_latency_filler_phrase_on_timeout,
         allow_auto_retry_on_failed_calls=record.allow_auto_retry_on_failed_calls,
     )
+
+
+def _looks_masked_secret(value: str) -> bool:
+    return "*" in value
 
 
 def _audit_record_to_schema(record: SettingsAuditRecord) -> PlatformSettingsAuditEntry:
@@ -218,15 +228,23 @@ def update_platform_settings(
     reason = updates.pop("change_reason", None)
     normalized_reason = reason.strip() if isinstance(reason, str) and reason.strip() else None
 
+    normalized_updates: dict[str, object] = {}
+
+    for field, value in updates.items():
+        if field in SENSITIVE_SETTINGS_FIELDS and isinstance(value, str) and _looks_masked_secret(value):
+            continue
+
+        normalized_updates[field] = value
+
     changed_fields = [
         field
-        for field, value in updates.items()
+        for field, value in normalized_updates.items()
         if hasattr(record, field) and getattr(record, field) != value
     ]
 
     if changed_fields:
         for field in changed_fields:
-            setattr(record, field, updates[field])
+            setattr(record, field, normalized_updates[field])
 
         record.updated_at = datetime.now(timezone.utc)
 

@@ -35,6 +35,7 @@ const OPENAI_KEY_PATTERN = /\S+/;
 const DEEPGRAM_KEY_PATTERN = /\S+/;
 const TWILIO_SID_PATTERN = /\S+/;
 const RIME_KEY_PATTERN = /\S+/;
+const MASKED_SECRET_PATTERN = /\*{3,}/;
 const HISTORY_LIMIT = 8;
 const HISTORY_FETCH_LIMIT = HISTORY_LIMIT + 1;
 const DEFAULT_AUDIT_ACTOR = 'platform-admin';
@@ -63,6 +64,13 @@ interface SettingsValidationErrors {
   rimeApiKey: string | null;
 }
 
+interface SettingsPlaceholderWarnings {
+  openaiApiKey: boolean;
+  deepgramApiKey: boolean;
+  twilioAccountSid: boolean;
+  rimeApiKey: boolean;
+}
+
 function validateSettingsKeys(settings: PlatformSettings | null): SettingsValidationErrors {
   if (!settings) {
     return {
@@ -89,6 +97,24 @@ function validateSettingsKeys(settings: PlatformSettings | null): SettingsValida
   };
 }
 
+function detectPlaceholderSecrets(settings: PlatformSettings | null): SettingsPlaceholderWarnings {
+  if (!settings) {
+    return {
+      openaiApiKey: false,
+      deepgramApiKey: false,
+      twilioAccountSid: false,
+      rimeApiKey: false,
+    };
+  }
+
+  return {
+    openaiApiKey: MASKED_SECRET_PATTERN.test(settings.openaiApiKey),
+    deepgramApiKey: MASKED_SECRET_PATTERN.test(settings.deepgramApiKey),
+    twilioAccountSid: MASKED_SECRET_PATTERN.test(settings.twilioAccountSid),
+    rimeApiKey: MASKED_SECRET_PATTERN.test(settings.rimeApiKey),
+  };
+}
+
 export function SettingsPage() {
   const canEditSettings = getUserRole() !== 'viewer';
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
@@ -112,9 +138,14 @@ export function SettingsPage() {
   const [historyHasNextPage, setHistoryHasNextPage] = useState(false);
 
   const validationErrors = useMemo(() => validateSettingsKeys(settings), [settings]);
+  const placeholderWarnings = useMemo(() => detectPlaceholderSecrets(settings), [settings]);
   const hasValidationErrors = useMemo(
     () => Object.values(validationErrors).some((value) => value !== null),
     [validationErrors],
+  );
+  const hasPlaceholderWarnings = useMemo(
+    () => Object.values(placeholderWarnings).some((value) => value),
+    [placeholderWarnings],
   );
 
   const invalidHistoryDateRange = useMemo(
@@ -240,12 +271,24 @@ export function SettingsPage() {
     }
 
     return [
-      { label: 'OpenAI', tone: validationErrors.openaiApiKey ? 'error' : 'active' },
-      { label: 'Deepgram', tone: validationErrors.deepgramApiKey ? 'error' : 'active' },
-      { label: 'Twilio', tone: validationErrors.twilioAccountSid ? 'error' : 'active' },
-      { label: 'Rime', tone: validationErrors.rimeApiKey ? 'error' : 'active' },
+      {
+        label: 'OpenAI',
+        tone: validationErrors.openaiApiKey || placeholderWarnings.openaiApiKey ? 'error' : 'active',
+      },
+      {
+        label: 'Deepgram',
+        tone: validationErrors.deepgramApiKey || placeholderWarnings.deepgramApiKey ? 'error' : 'active',
+      },
+      {
+        label: 'Twilio',
+        tone: validationErrors.twilioAccountSid || placeholderWarnings.twilioAccountSid ? 'error' : 'active',
+      },
+      {
+        label: 'Rime',
+        tone: validationErrors.rimeApiKey || placeholderWarnings.rimeApiKey ? 'error' : 'active',
+      },
     ] as const;
-  }, [settings, validationErrors]);
+  }, [settings, validationErrors, placeholderWarnings]);
 
   const historyFieldOptions = useMemo(() => {
     const fallbackFields = Object.keys(FIELD_LABELS);
@@ -399,6 +442,12 @@ export function SettingsPage() {
         </Alert>
       ) : null}
 
+      {hasPlaceholderWarnings ? (
+        <Alert severity="info" sx={{ mb: 2.2 }}>
+          Masked placeholders detected. Paste full provider keys to enable live OpenAI, Deepgram, Twilio, and Rime calls.
+        </Alert>
+      ) : null}
+
       <Grid2 container spacing={2.2}>
         <Grid2 size={{ xs: 12, lg: 7 }}>
           <Card variant="outlined">
@@ -411,32 +460,52 @@ export function SettingsPage() {
                   label="OpenAI API Key"
                   value={settings?.openaiApiKey ?? ''}
                   onChange={(event) => updateField('openaiApiKey', event.target.value)}
-                  error={Boolean(validationErrors.openaiApiKey)}
-                  helperText={validationErrors.openaiApiKey ?? 'Any non-empty key'}
+                  error={Boolean(validationErrors.openaiApiKey || placeholderWarnings.openaiApiKey)}
+                  helperText={
+                    validationErrors.openaiApiKey ??
+                    (placeholderWarnings.openaiApiKey
+                      ? 'Masked placeholder detected. Paste a full OpenAI key.'
+                      : 'Any non-empty key')
+                  }
                   fullWidth
                 />
                 <TextField
                   label="Deepgram API Key"
                   value={settings?.deepgramApiKey ?? ''}
                   onChange={(event) => updateField('deepgramApiKey', event.target.value)}
-                  error={Boolean(validationErrors.deepgramApiKey)}
-                  helperText={validationErrors.deepgramApiKey ?? 'Any non-empty key'}
+                  error={Boolean(validationErrors.deepgramApiKey || placeholderWarnings.deepgramApiKey)}
+                  helperText={
+                    validationErrors.deepgramApiKey ??
+                    (placeholderWarnings.deepgramApiKey
+                      ? 'Masked placeholder detected. Paste a full Deepgram key.'
+                      : 'Any non-empty key')
+                  }
                   fullWidth
                 />
                 <TextField
                   label="Twilio Account SID"
                   value={settings?.twilioAccountSid ?? ''}
                   onChange={(event) => updateField('twilioAccountSid', event.target.value)}
-                  error={Boolean(validationErrors.twilioAccountSid)}
-                  helperText={validationErrors.twilioAccountSid ?? 'Any non-empty key'}
+                  error={Boolean(validationErrors.twilioAccountSid || placeholderWarnings.twilioAccountSid)}
+                  helperText={
+                    validationErrors.twilioAccountSid ??
+                    (placeholderWarnings.twilioAccountSid
+                      ? 'Masked placeholder detected. Paste a full Twilio SID.'
+                      : 'Any non-empty key')
+                  }
                   fullWidth
                 />
                 <TextField
                   label="Rime API Key"
                   value={settings?.rimeApiKey ?? ''}
                   onChange={(event) => updateField('rimeApiKey', event.target.value)}
-                  error={Boolean(validationErrors.rimeApiKey)}
-                  helperText={validationErrors.rimeApiKey ?? 'Any non-empty key'}
+                  error={Boolean(validationErrors.rimeApiKey || placeholderWarnings.rimeApiKey)}
+                  helperText={
+                    validationErrors.rimeApiKey ??
+                    (placeholderWarnings.rimeApiKey
+                      ? 'Masked placeholder detected. Paste a full Rime key.'
+                      : 'Any non-empty key')
+                  }
                   fullWidth
                 />
               </Stack>

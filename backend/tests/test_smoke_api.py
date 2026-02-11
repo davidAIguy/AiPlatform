@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from backend.app.db import CallSessionRecord, SessionLocal, initialize_database
+from backend.app.db import CallSessionRecord, PlatformSettingsRecord, SessionLocal, initialize_database
 from backend.app.main import app
 
 
@@ -531,6 +531,40 @@ def test_update_settings_without_changes_does_not_append_history() -> None:
     after_entries = after_history_response.json()
 
     assert len(after_entries) == len(before_entries)
+
+
+def test_update_settings_ignores_masked_secret_placeholders() -> None:
+    admin_headers = login_headers()
+
+    with SessionLocal() as db:
+        record = db.query(PlatformSettingsRecord).first()
+        assert record is not None
+        record.openai_api_key = "sk-real-openai-1234567890"
+        record.rime_api_key = "rm-real-rime-1234567890"
+        original_auto_retry = record.allow_auto_retry_on_failed_calls
+        db.add(record)
+        db.commit()
+
+    response = client.patch(
+        "/api/settings",
+        json={
+            "openaiApiKey": "sk-live-*********************",
+            "rimeApiKey": "rm-live-*********************",
+            "allowAutoRetryOnFailedCalls": not original_auto_retry,
+            "auditActor": "qa-admin",
+            "changeReason": "Ignore masked placeholders while updating toggles.",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    with SessionLocal() as db:
+        updated = db.query(PlatformSettingsRecord).first()
+        assert updated is not None
+        assert updated.openai_api_key == "sk-real-openai-1234567890"
+        assert updated.rime_api_key == "rm-real-rime-1234567890"
+        assert updated.allow_auto_retry_on_failed_calls is (not original_auto_retry)
 
 
 def test_update_settings_rejects_invalid_keys() -> None:

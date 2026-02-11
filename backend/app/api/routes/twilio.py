@@ -1,3 +1,4 @@
+import logging
 from base64 import b64decode
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -6,14 +7,19 @@ from xml.sax.saxutils import escape
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
-from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.settings import get_settings
 from backend.app.db import AgentRecord, CallSessionRecord, PlatformSettingsRecord, get_db
 
 router = APIRouter(prefix="/twilio", tags=["twilio"])
 AUDIO_CACHE_TTL_MINUTES = 20
+RIME_MODEL_ID = "mist"
+RIME_FALLBACK_VOICE = "allison"
 audio_cache: dict[str, dict[str, object]] = {}
+logger = logging.getLogger("uvicorn.error")
+runtime_settings = get_settings()
 
 
 def _normalize_secret(value: str) -> str:
@@ -23,6 +29,15 @@ def _normalize_secret(value: str) -> str:
         return ""
 
     return trimmed
+
+
+def _resolve_provider_key(settings_value: str, env_value: str) -> str:
+    normalized_settings_value = _normalize_secret(settings_value)
+
+    if normalized_settings_value:
+        return normalized_settings_value
+
+    return _normalize_secret(env_value)
 
 
 def _normalize_phone(value: str) -> str:
@@ -68,8 +83,21 @@ def _twilio_status_to_domain(call_status: str) -> str:
 
 
 def _next_call_id(db: Session) -> str:
-    current_total = db.query(func.count(CallSessionRecord.id)).scalar() or 0
-    return f"call-{current_total + 1}"
+    numeric_ids: list[int] = []
+
+    for row in db.query(CallSessionRecord.call_id).all():
+        call_id = row[0]
+
+        if not isinstance(call_id, str):
+            continue
+
+        try:
+            numeric_ids.append(int(call_id.split("-")[-1]))
+        except ValueError:
+            continue
+
+    next_id = (max(numeric_ids) if numeric_ids else 0) + 1
+    return f"call-{next_id}"
 
 
 def _cleanup_audio_cache() -> None:
@@ -107,14 +135,20 @@ def _resolve_voice_name(voice_id: str) -> str:
     if value.startswith("rime-"):
         return value.replace("rime-", "", 1)
 
-    return value or "serena"
+    return value or RIME_FALLBACK_VOICE
 
 
 def _load_platform_settings(db: Session) -> Optional[PlatformSettingsRecord]:
     return db.query(PlatformSettingsRecord).first()
 
 
-def _generate_greeting_text(agent_name: str, caller_number: str, prompt: str, model: str, openai_api_key: str) -> str:
+def _generate_greeting_text(
+    agent_name: str,
+    caller_number: str,
+    prompt: str,
+    model: str,
+    openai_api_key: str,
+) -> tuple[str, str]:
     fallback = (
         f"Hello, this is {agent_name}. Thanks for calling. "
         "How can I help you today?"
@@ -123,7 +157,7 @@ def _generate_greeting_text(agent_name: str, caller_number: str, prompt: str, mo
     safe_key = _normalize_secret(openai_api_key)
 
     if not safe_key:
-        return fallback
+        return fallback, "fallback-missing-openai-key"
 
     user_prompt = (
         "Generate one concise spoken greeting for an inbound phone call. "
@@ -160,16 +194,22 @@ def _generate_greeting_text(agent_name: str, caller_number: str, prompt: str, mo
             .strip()
         )
 
-        return content or fallback
+        return (content or fallback), "openai"
     except Exception:
-        return fallback
+        return fallback, "fallback-openai-error"
 
 
-def _generate_reply_text(agent_name: str, caller_text: str, prompt: str, model: str, openai_api_key: str) -> str:
+def _generate_reply_text(
+    agent_name: str,
+    caller_text: str,
+    prompt: str,
+    model: str,
+    openai_api_key: str,
+) -> tuple[str, str]:
     normalized_caller_text = caller_text.strip()
 
     if not normalized_caller_text:
-        return "I did not catch that clearly. Could you call again so I can assist you better?"
+        return "I did not catch that clearly. Could you call again so I can assist you better?", "fallback-empty-speech"
 
     fallback = (
         f"Thanks for sharing. I understood that you said: {normalized_caller_text[:80]}. "
@@ -179,7 +219,7 @@ def _generate_reply_text(agent_name: str, caller_text: str, prompt: str, model: 
     safe_key = _normalize_secret(openai_api_key)
 
     if not safe_key:
-        return fallback
+        return fallback, "fallback-missing-openai-key"
 
     user_prompt = (
         "Respond as a phone assistant in at most 2 concise sentences. "
@@ -216,49 +256,59 @@ def _generate_reply_text(agent_name: str, caller_text: str, prompt: str, model: 
             .strip()
         )
 
-        return content or fallback
+        return (content or fallback), "openai"
     except Exception:
-        return fallback
+        return fallback, "fallback-openai-error"
 
 
-def _synthesize_rime_audio(text: str, voice_name: str, rime_api_key: str) -> Optional[tuple[bytes, str]]:
+def _synthesize_rime_audio(
+    text: str,
+    voice_name: str,
+    rime_api_key: str,
+) -> tuple[Optional[tuple[bytes, str]], str]:
     safe_key = _normalize_secret(rime_api_key)
 
     if not safe_key:
-        return None
+        return None, "fallback-missing-rime-key"
 
-    payload = {
-        "speaker": voice_name,
-        "text": text,
-        "modelId": "arcana",
-    }
+    candidates = [voice_name.strip().lower(), RIME_FALLBACK_VOICE]
+    seen: set[str] = set()
 
-    try:
-        with httpx.Client(timeout=18.0) as client:
-            response = client.post(
-                "https://users.rime.ai/v1/rime-tts",
-                headers={
-                    "Authorization": f"Bearer {safe_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
+    with httpx.Client(timeout=18.0) as client:
+        for candidate in candidates:
+            if not candidate or candidate in seen:
+                continue
 
-        response.raise_for_status()
-        content_type = (response.headers.get("content-type") or "").lower()
+            seen.add(candidate)
 
-        if "audio" in content_type:
-            return response.content, content_type.split(";")[0]
+            try:
+                response = client.post(
+                    "https://users.rime.ai/v1/rime-tts",
+                    headers={
+                        "Authorization": f"Bearer {safe_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "speaker": candidate,
+                        "text": text,
+                        "modelId": RIME_MODEL_ID,
+                    },
+                )
+                response.raise_for_status()
+                content_type = (response.headers.get("content-type") or "").lower()
 
-        json_payload = response.json()
-        encoded_audio = json_payload.get("audioContent") or json_payload.get("audio")
+                if "audio" in content_type:
+                    return (response.content, content_type.split(";")[0]), "rime"
 
-        if isinstance(encoded_audio, str) and encoded_audio.strip():
-            return b64decode(encoded_audio), "audio/mpeg"
+                json_payload = response.json()
+                encoded_audio = json_payload.get("audioContent") or json_payload.get("audio")
 
-        return None
-    except Exception:
-        return None
+                if isinstance(encoded_audio, str) and encoded_audio.strip():
+                    return (b64decode(encoded_audio), "audio/mpeg"), "rime"
+            except Exception:
+                continue
+
+    return None, "fallback-rime-error"
 
 
 def _public_url_for(request: Request, route_name: str, **path_params: str) -> str:
@@ -300,22 +350,42 @@ def inbound_voice_webhook(
                 updated_at=datetime.now(timezone.utc),
             )
         )
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
 
     gather_url = _public_url_for(request, "voice_gather_webhook")
     platform_settings = _load_platform_settings(db)
+    openai_key = _resolve_provider_key(
+        platform_settings.openai_api_key if platform_settings else "",
+        runtime_settings.openai_api_key,
+    )
+    rime_key = _resolve_provider_key(
+        platform_settings.rime_api_key if platform_settings else "",
+        runtime_settings.rime_api_key,
+    )
 
-    greeting_text = _generate_greeting_text(
+    greeting_text, text_provider = _generate_greeting_text(
         agent_name=agent.name,
         caller_number=from_number,
         prompt=agent.prompt,
         model=agent.model,
-        openai_api_key=platform_settings.openai_api_key if platform_settings else "",
+        openai_api_key=openai_key,
     )
-    audio_blob = _synthesize_rime_audio(
+    audio_blob, audio_provider = _synthesize_rime_audio(
         text=greeting_text,
         voice_name=_resolve_voice_name(agent.voice_id),
-        rime_api_key=platform_settings.rime_api_key if platform_settings else "",
+        rime_api_key=rime_key,
+    )
+
+    logger.info(
+        "twilio.voice agent_id=%s model=%s prompt_version=%s text_provider=%s audio_provider=%s",
+        agent.agent_id,
+        agent.model,
+        agent.prompt_version,
+        text_provider,
+        audio_provider,
     )
 
     intro = ""
@@ -387,22 +457,44 @@ def voice_gather_webhook(
                 updated_at=datetime.now(timezone.utc),
             )
         )
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
         existing = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
 
     agent = _match_agent_by_number(db, to_number)
     platform_settings = _load_platform_settings(db)
-    reply_text = _generate_reply_text(
+    openai_key = _resolve_provider_key(
+        platform_settings.openai_api_key if platform_settings else "",
+        runtime_settings.openai_api_key,
+    )
+    rime_key = _resolve_provider_key(
+        platform_settings.rime_api_key if platform_settings else "",
+        runtime_settings.rime_api_key,
+    )
+
+    reply_text, text_provider = _generate_reply_text(
         agent_name=agent.name,
         caller_text=speech_result,
         prompt=agent.prompt,
         model=agent.model,
-        openai_api_key=platform_settings.openai_api_key if platform_settings else "",
+        openai_api_key=openai_key,
     )
-    audio_blob = _synthesize_rime_audio(
+    audio_blob, audio_provider = _synthesize_rime_audio(
         text=reply_text,
         voice_name=_resolve_voice_name(agent.voice_id),
-        rime_api_key=platform_settings.rime_api_key if platform_settings else "",
+        rime_api_key=rime_key,
+    )
+
+    logger.info(
+        "twilio.gather agent_id=%s model=%s prompt_version=%s text_provider=%s audio_provider=%s has_speech=%s",
+        agent.agent_id,
+        agent.model,
+        agent.prompt_version,
+        text_provider,
+        audio_provider,
+        bool(speech_result.strip()),
     )
 
     if existing is not None:

@@ -31,6 +31,8 @@ Required variables:
 - `VIEWER_EMAIL`, `VIEWER_PASSWORD`
 - `ADMIN_API_TOKEN`, `EDITOR_API_TOKEN`, `VIEWER_API_TOKEN`
 - `CORS_ALLOW_ORIGINS` = frontend public URL, e.g. `https://web-production.up.railway.app`
+- `OPENAI_API_KEY` = real OpenAI key (fallback if Settings value is masked/placeholder)
+- `RIME_API_KEY` = real Rime key (fallback if Settings value is masked/placeholder)
 
 ## 3) Configure `web` service
 
@@ -59,6 +61,7 @@ After both services are healthy:
 1. Open web URL and login as admin.
 2. Go to Settings, make a small change, Save.
 3. Confirm history entry appears.
+4. Paste full provider keys for OpenAI and Rime if you still see masked placeholders.
 
 API checks:
 

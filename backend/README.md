@@ -46,6 +46,7 @@ Notes:
 - Settings keys are validated on update as non-empty values.
 - Settings history is stored in SQLite with changed field names and timestamp.
 - Settings updates can include `auditActor` and `changeReason`, which are stored in history.
+- Twilio greeting/reply generation uses provider keys from settings and can fall back to `OPENAI_API_KEY` / `RIME_API_KEY` env vars when stored values are masked placeholders.
 - Settings history supports pagination/filter query params: `limit`, `offset`, `actor`, `fromDate`, `toDate`, and `changedField`.
 - Settings history metadata endpoint returns available actors/fields plus totals for richer filter UIs.
 - Cross-origin access is controlled by `CORS_ALLOW_ORIGINS`.
