@@ -32,9 +32,9 @@ import {
 } from '../types/domain';
 
 const OPENAI_KEY_PATTERN = /^sk-[A-Za-z0-9*._-]{10,}$/;
-const DEEPGRAM_KEY_PATTERN = /^dg-[A-Za-z0-9*._-]{8,}$/;
+const DEEPGRAM_KEY_PATTERN = /\S+/;
 const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
-const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
+const RIME_KEY_PATTERN = /\S+/;
 const HISTORY_LIMIT = 8;
 const HISTORY_FETCH_LIMIT = HISTORY_LIMIT + 1;
 const DEFAULT_AUDIT_ACTOR = 'platform-admin';
@@ -79,13 +79,13 @@ function validateSettingsKeys(settings: PlatformSettings | null): SettingsValida
       : "Must start with 'sk-' and include at least 10 more characters.",
     deepgramApiKey: DEEPGRAM_KEY_PATTERN.test(settings.deepgramApiKey)
       ? null
-      : "Must start with 'dg-' and include at least 8 more characters.",
+      : 'Deepgram key cannot be empty.',
     twilioAccountSid: TWILIO_SID_PATTERN.test(settings.twilioAccountSid)
       ? null
       : "Must start with 'AC' and include at least 10 more characters.",
     rimeApiKey: RIME_KEY_PATTERN.test(settings.rimeApiKey)
       ? null
-      : "Must start with 'rm-' and include at least 8 more characters.",
+      : 'Rime key cannot be empty.',
   };
 }
 
@@ -420,7 +420,7 @@ export function SettingsPage() {
                   value={settings?.deepgramApiKey ?? ''}
                   onChange={(event) => updateField('deepgramApiKey', event.target.value)}
                   error={Boolean(validationErrors.deepgramApiKey)}
-                  helperText={validationErrors.deepgramApiKey ?? 'Expected: dg-...'}
+                  helperText={validationErrors.deepgramApiKey ?? 'Any non-empty key'}
                   fullWidth
                 />
                 <TextField
@@ -436,7 +436,7 @@ export function SettingsPage() {
                   value={settings?.rimeApiKey ?? ''}
                   onChange={(event) => updateField('rimeApiKey', event.target.value)}
                   error={Boolean(validationErrors.rimeApiKey)}
-                  helperText={validationErrors.rimeApiKey ?? 'Expected: rm-...'}
+                  helperText={validationErrors.rimeApiKey ?? 'Any non-empty key'}
                   fullWidth
                 />
               </Stack>

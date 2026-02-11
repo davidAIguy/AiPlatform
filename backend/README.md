@@ -42,7 +42,7 @@ Notes:
 - Settings and settings history now persist in SQLite (`DATABASE_URL`) instead of in-memory only.
 - Auth uses bearer tokens from `/api/auth/login` and role checks (viewer/editor/admin) for settings endpoints.
 - Agent create/update payloads now persist both `prompt` and `promptVersion`.
-- Settings keys are validated on update (`sk-` OpenAI, `dg-` Deepgram, `AC` Twilio SID, `rm-` Rime).
+- Settings keys are validated on update (`sk-` OpenAI and `AC` Twilio SID keep strict format; Deepgram and Rime require non-empty values).
 - Settings history is stored in SQLite with changed field names and timestamp.
 - Settings updates can include `auditActor` and `changeReason`, which are stored in history.
 - Settings history supports pagination/filter query params: `limit`, `offset`, `actor`, `fromDate`, `toDate`, and `changedField`.

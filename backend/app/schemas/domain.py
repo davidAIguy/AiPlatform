@@ -17,6 +17,13 @@ def _require_pattern(value: str, pattern: re.Pattern[str], message: str) -> str:
     raise ValueError(message)
 
 
+def _require_non_empty(value: str, message: str) -> str:
+    if value.strip():
+        return value
+
+    raise ValueError(message)
+
+
 def to_camel(value: str) -> str:
     parts = value.split("_")
     return parts[0] + "".join(part.capitalize() for part in parts[1:])
@@ -122,10 +129,9 @@ class PlatformSettings(ApiSchema):
     @field_validator("deepgram_api_key")
     @classmethod
     def validate_deepgram_api_key(cls, value: str) -> str:
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            DEEPGRAM_KEY_PATTERN,
-            "deepgramApiKey must start with 'dg-' and contain at least 8 additional characters",
+            "deepgramApiKey cannot be empty",
         )
 
     @field_validator("twilio_account_sid")
@@ -140,10 +146,9 @@ class PlatformSettings(ApiSchema):
     @field_validator("rime_api_key")
     @classmethod
     def validate_rime_api_key(cls, value: str) -> str:
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            RIME_KEY_PATTERN,
-            "rimeApiKey must start with 'rm-' and contain at least 8 additional characters",
+            "rimeApiKey cannot be empty",
         )
 
 
@@ -176,10 +181,9 @@ class PlatformSettingsUpdate(ApiSchema):
         if value is None:
             return value
 
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            DEEPGRAM_KEY_PATTERN,
-            "deepgramApiKey must start with 'dg-' and contain at least 8 additional characters",
+            "deepgramApiKey cannot be empty",
         )
 
     @field_validator("twilio_account_sid")
@@ -200,10 +204,9 @@ class PlatformSettingsUpdate(ApiSchema):
         if value is None:
             return value
 
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            RIME_KEY_PATTERN,
-            "rimeApiKey must start with 'rm-' and contain at least 8 additional characters",
+            "rimeApiKey cannot be empty",
         )
 
 
