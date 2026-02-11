@@ -19,6 +19,44 @@ import { StatusChip } from '../components/common/StatusChip';
 import { getPlatformSettings, updatePlatformSettings } from '../lib/api';
 import { PlatformSettings } from '../types/domain';
 
+const OPENAI_KEY_PATTERN = /^sk-[A-Za-z0-9*._-]{10,}$/;
+const DEEPGRAM_KEY_PATTERN = /^dg-[A-Za-z0-9*._-]{8,}$/;
+const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
+const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
+
+interface SettingsValidationErrors {
+  openaiApiKey: string | null;
+  deepgramApiKey: string | null;
+  twilioAccountSid: string | null;
+  rimeApiKey: string | null;
+}
+
+function validateSettingsKeys(settings: PlatformSettings | null): SettingsValidationErrors {
+  if (!settings) {
+    return {
+      openaiApiKey: null,
+      deepgramApiKey: null,
+      twilioAccountSid: null,
+      rimeApiKey: null,
+    };
+  }
+
+  return {
+    openaiApiKey: OPENAI_KEY_PATTERN.test(settings.openaiApiKey)
+      ? null
+      : "Must start with 'sk-' and include at least 10 more characters.",
+    deepgramApiKey: DEEPGRAM_KEY_PATTERN.test(settings.deepgramApiKey)
+      ? null
+      : "Must start with 'dg-' and include at least 8 more characters.",
+    twilioAccountSid: TWILIO_SID_PATTERN.test(settings.twilioAccountSid)
+      ? null
+      : "Must start with 'AC' and include at least 10 more characters.",
+    rimeApiKey: RIME_KEY_PATTERN.test(settings.rimeApiKey)
+      ? null
+      : "Must start with 'rm-' and include at least 8 more characters.",
+  };
+}
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +65,12 @@ export function SettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+
+  const validationErrors = useMemo(() => validateSettingsKeys(settings), [settings]);
+  const hasValidationErrors = useMemo(
+    () => Object.values(validationErrors).some((value) => value !== null),
+    [validationErrors],
+  );
 
   useEffect(() => {
     let active = true;
@@ -70,12 +114,12 @@ export function SettingsPage() {
     }
 
     return [
-      { label: 'OpenAI', tone: settings.openaiApiKey.trim() ? 'active' : 'error' },
-      { label: 'Deepgram', tone: settings.deepgramApiKey.trim() ? 'active' : 'error' },
-      { label: 'Twilio', tone: settings.twilioAccountSid.trim() ? 'active' : 'error' },
-      { label: 'Rime', tone: settings.rimeApiKey.trim() ? 'active' : 'error' },
+      { label: 'OpenAI', tone: validationErrors.openaiApiKey ? 'error' : 'active' },
+      { label: 'Deepgram', tone: validationErrors.deepgramApiKey ? 'error' : 'active' },
+      { label: 'Twilio', tone: validationErrors.twilioAccountSid ? 'error' : 'active' },
+      { label: 'Rime', tone: validationErrors.rimeApiKey ? 'error' : 'active' },
     ] as const;
-  }, [settings]);
+  }, [settings, validationErrors]);
 
   function updateField<K extends keyof PlatformSettings>(field: K, value: PlatformSettings[K]) {
     setSettings((current) => {
@@ -92,6 +136,12 @@ export function SettingsPage() {
 
   async function handleSave() {
     if (!settings) {
+      return;
+    }
+
+    if (hasValidationErrors) {
+      setSaveSuccess(null);
+      setSaveError('Please fix invalid key formats before saving.');
       return;
     }
 
@@ -116,7 +166,12 @@ export function SettingsPage() {
       title="Platform Settings"
       subtitle="Control global integrations, webhook behavior, and latency fallback policies."
       headerAction={
-        <Button variant="contained" startIcon={<SaveRoundedIcon />} onClick={handleSave} disabled={loading || saving || !settings}>
+        <Button
+          variant="contained"
+          startIcon={<SaveRoundedIcon />}
+          onClick={handleSave}
+          disabled={loading || saving || !settings || hasValidationErrors}
+        >
           Save Changes
         </Button>
       }
@@ -153,6 +208,12 @@ export function SettingsPage() {
         </Alert>
       ) : null}
 
+      {hasValidationErrors ? (
+        <Alert severity="warning" sx={{ mb: 2.2 }}>
+          Some credentials do not match expected formats. Please review highlighted fields.
+        </Alert>
+      ) : null}
+
       <Grid2 container spacing={2.2}>
         <Grid2 size={{ xs: 12, lg: 7 }}>
           <Card variant="outlined">
@@ -165,24 +226,32 @@ export function SettingsPage() {
                   label="OpenAI API Key"
                   value={settings?.openaiApiKey ?? ''}
                   onChange={(event) => updateField('openaiApiKey', event.target.value)}
+                  error={Boolean(validationErrors.openaiApiKey)}
+                  helperText={validationErrors.openaiApiKey ?? 'Expected: sk-...'}
                   fullWidth
                 />
                 <TextField
                   label="Deepgram API Key"
                   value={settings?.deepgramApiKey ?? ''}
                   onChange={(event) => updateField('deepgramApiKey', event.target.value)}
+                  error={Boolean(validationErrors.deepgramApiKey)}
+                  helperText={validationErrors.deepgramApiKey ?? 'Expected: dg-...'}
                   fullWidth
                 />
                 <TextField
                   label="Twilio Account SID"
                   value={settings?.twilioAccountSid ?? ''}
                   onChange={(event) => updateField('twilioAccountSid', event.target.value)}
+                  error={Boolean(validationErrors.twilioAccountSid)}
+                  helperText={validationErrors.twilioAccountSid ?? 'Expected: AC...'}
                   fullWidth
                 />
                 <TextField
                   label="Rime API Key"
                   value={settings?.rimeApiKey ?? ''}
                   onChange={(event) => updateField('rimeApiKey', event.target.value)}
+                  error={Boolean(validationErrors.rimeApiKey)}
+                  helperText={validationErrors.rimeApiKey ?? 'Expected: rm-...'}
                   fullWidth
                 />
               </Stack>

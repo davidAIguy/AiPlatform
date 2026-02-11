@@ -11,11 +11,31 @@ import {
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
+async function toRequestError(response: Response): Promise<Error> {
+  let detailMessage = '';
+
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+
+    if (typeof payload.detail === 'string') {
+      detailMessage = payload.detail;
+    } else if (Array.isArray(payload.detail) && payload.detail.length > 0) {
+      const firstIssue = payload.detail[0] as { msg?: string } | undefined;
+      detailMessage = firstIssue?.msg ?? '';
+    }
+  } catch {
+    detailMessage = '';
+  }
+
+  const fallback = `Request failed: ${response.status} ${response.statusText}`;
+  return new Error(detailMessage || fallback);
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw await toRequestError(response);
   }
 
   return response.json() as Promise<T>;
@@ -31,7 +51,7 @@ async function sendJson<T>(path: string, method: 'POST' | 'PATCH', payload: unkn
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw await toRequestError(response);
   }
 
   return response.json() as Promise<T>;
@@ -43,7 +63,7 @@ async function deleteJson<T>(path: string): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw await toRequestError(response);
   }
 
   return response.json() as Promise<T>;

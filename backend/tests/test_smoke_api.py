@@ -192,3 +192,16 @@ def test_update_settings_endpoint() -> None:
     settings = response.json()
     assert settings["allowAutoRetryOnFailedCalls"] is True
     assert settings["playLatencyFillerPhraseOnTimeout"] is False
+
+
+def test_update_settings_rejects_invalid_keys() -> None:
+    response = client.patch(
+        "/api/settings",
+        json={
+            "openaiApiKey": "invalid-key",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert "detail" in payload

@@ -1,7 +1,20 @@
+import re
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+OPENAI_KEY_PATTERN = re.compile(r"^sk-[A-Za-z0-9*._-]{10,}$")
+DEEPGRAM_KEY_PATTERN = re.compile(r"^dg-[A-Za-z0-9*._-]{8,}$")
+TWILIO_SID_PATTERN = re.compile(r"^AC[A-Za-z0-9*]{10,}$")
+RIME_KEY_PATTERN = re.compile(r"^rm-[A-Za-z0-9*._-]{8,}$")
+
+
+def _require_pattern(value: str, pattern: re.Pattern[str], message: str) -> str:
+    if pattern.match(value):
+        return value
+
+    raise ValueError(message)
 
 
 def to_camel(value: str) -> str:
@@ -97,6 +110,42 @@ class PlatformSettings(ApiSchema):
     play_latency_filler_phrase_on_timeout: bool
     allow_auto_retry_on_failed_calls: bool
 
+    @field_validator("openai_api_key")
+    @classmethod
+    def validate_openai_api_key(cls, value: str) -> str:
+        return _require_pattern(
+            value,
+            OPENAI_KEY_PATTERN,
+            "openaiApiKey must start with 'sk-' and contain at least 10 additional characters",
+        )
+
+    @field_validator("deepgram_api_key")
+    @classmethod
+    def validate_deepgram_api_key(cls, value: str) -> str:
+        return _require_pattern(
+            value,
+            DEEPGRAM_KEY_PATTERN,
+            "deepgramApiKey must start with 'dg-' and contain at least 8 additional characters",
+        )
+
+    @field_validator("twilio_account_sid")
+    @classmethod
+    def validate_twilio_account_sid(cls, value: str) -> str:
+        return _require_pattern(
+            value,
+            TWILIO_SID_PATTERN,
+            "twilioAccountSid must start with 'AC' and contain at least 10 additional characters",
+        )
+
+    @field_validator("rime_api_key")
+    @classmethod
+    def validate_rime_api_key(cls, value: str) -> str:
+        return _require_pattern(
+            value,
+            RIME_KEY_PATTERN,
+            "rimeApiKey must start with 'rm-' and contain at least 8 additional characters",
+        )
+
 
 class PlatformSettingsUpdate(ApiSchema):
     openai_api_key: Optional[str] = None
@@ -106,6 +155,54 @@ class PlatformSettingsUpdate(ApiSchema):
     enable_barge_in_interruption: Optional[bool] = None
     play_latency_filler_phrase_on_timeout: Optional[bool] = None
     allow_auto_retry_on_failed_calls: Optional[bool] = None
+
+    @field_validator("openai_api_key")
+    @classmethod
+    def validate_openai_api_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+
+        return _require_pattern(
+            value,
+            OPENAI_KEY_PATTERN,
+            "openaiApiKey must start with 'sk-' and contain at least 10 additional characters",
+        )
+
+    @field_validator("deepgram_api_key")
+    @classmethod
+    def validate_deepgram_api_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+
+        return _require_pattern(
+            value,
+            DEEPGRAM_KEY_PATTERN,
+            "deepgramApiKey must start with 'dg-' and contain at least 8 additional characters",
+        )
+
+    @field_validator("twilio_account_sid")
+    @classmethod
+    def validate_twilio_account_sid(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+
+        return _require_pattern(
+            value,
+            TWILIO_SID_PATTERN,
+            "twilioAccountSid must start with 'AC' and contain at least 10 additional characters",
+        )
+
+    @field_validator("rime_api_key")
+    @classmethod
+    def validate_rime_api_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+
+        return _require_pattern(
+            value,
+            RIME_KEY_PATTERN,
+            "rimeApiKey must start with 'rm-' and contain at least 8 additional characters",
+        )
 
 
 class CallSession(ApiSchema):
