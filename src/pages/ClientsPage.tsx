@@ -1,4 +1,4 @@
-import { Alert, Card, CardContent, CircularProgress, Divider, Grid2, Stack, Typography } from '@mui/material';
+import { Alert, Button, Card, CardContent, CircularProgress, Divider, Grid2, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { OrganizationCard } from '../components/clients/OrganizationCard';
 import { AppLayout } from '../components/layout/AppLayout';
@@ -11,6 +11,7 @@ export function ClientsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -45,7 +46,7 @@ export function ClientsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadToken]);
 
   return (
     <AppLayout
@@ -59,7 +60,15 @@ export function ClientsPage() {
       ) : null}
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 2.2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => setReloadToken((current) => current + 1)}>
+              Retry
+            </Button>
+          }
+        >
           {error}
         </Alert>
       ) : null}

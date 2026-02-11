@@ -1,6 +1,8 @@
 from backend.app.schemas.domain import (
     Agent,
+    AgentCreate,
     AgentStatus,
+    AgentUpdate,
     CallSession,
     CallStatus,
     DashboardKpi,
@@ -15,7 +17,9 @@ from backend.app.schemas.domain import (
 
 __all__ = [
     "Agent",
+    "AgentCreate",
     "AgentStatus",
+    "AgentUpdate",
     "CallSession",
     "CallStatus",
     "DashboardKpi",

@@ -1,9 +1,37 @@
-import { Agent, CallSession, DashboardOverview, Organization } from '../types/domain';
+import { Agent, AgentCreateInput, AgentUpdateInput, CallSession, DashboardOverview, Organization } from '../types/domain';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function sendJson<T>(path: string, method: 'POST' | 'PATCH', payload: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function deleteJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'DELETE',
+  });
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status} ${response.statusText}`);
@@ -36,6 +64,18 @@ export function listAgents(filters?: { status?: Agent['status']; organizationNam
 
   const query = params.toString();
   return getJson<Agent[]>(`/api/agents${query ? `?${query}` : ''}`);
+}
+
+export function createAgent(payload: AgentCreateInput) {
+  return sendJson<Agent>('/api/agents', 'POST', payload);
+}
+
+export function updateAgent(agentId: string, payload: AgentUpdateInput) {
+  return sendJson<Agent>(`/api/agents/${agentId}`, 'PATCH', payload);
+}
+
+export function deleteAgent(agentId: string) {
+  return deleteJson<Agent>(`/api/agents/${agentId}`);
 }
 
 export function listCalls(filters?: { status?: CallSession['status']; agentName?: string; limit?: number }) {

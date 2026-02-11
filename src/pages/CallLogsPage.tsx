@@ -21,23 +21,30 @@ import {
   Divider,
   Grid2,
   IconButton,
+  MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { StatusChip } from '../components/common/StatusChip';
 import { listAgents, listCalls } from '../lib/api';
 import { Agent, CallSession } from '../types/domain';
 
 type LogStatus = 'success' | 'flagged' | 'failed';
+type StatusFilter = 'all' | LogStatus;
+type DateRangeFilter = '7d' | '30d' | '90d' | 'all';
+
+const validStatusFilters: StatusFilter[] = ['all', 'success', 'flagged', 'failed'];
+const validDateRangeFilters: DateRangeFilter[] = ['7d', '30d', '90d', 'all'];
 
 interface LogRow {
   id: string;
   date: string;
   time: string;
+  startedAtDate: Date | null;
   client: string;
   agentName: string;
   clientId: string;
@@ -101,6 +108,23 @@ function getInitials(label: string): string {
     .join('');
 }
 
+function parseStartedAt(value: string): Date | null {
+  const [datePart = '', timePart = ''] = value.split(' ');
+
+  if (!datePart) {
+    return null;
+  }
+
+  const normalizedTime = timePart.length > 0 ? `${timePart}:00` : '00:00:00';
+  const parsed = new Date(`${datePart}T${normalizedTime}`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function toLogStatus(status: CallSession['status']): LogStatus {
   if (status === 'completed') {
     return 'success';
@@ -152,11 +176,54 @@ const leftNav = [
 
 export function CallLogsPage() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [expandedRowId, setExpandedRowId] = useState('');
   const [logRows, setLogRows] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const query = searchParams.get('q') ?? '';
+  const statusFilter = validStatusFilters.includes(searchParams.get('status') as StatusFilter)
+    ? (searchParams.get('status') as StatusFilter)
+    : 'all';
+  const dateRangeFilter = validDateRangeFilters.includes(searchParams.get('range') as DateRangeFilter)
+    ? (searchParams.get('range') as DateRangeFilter)
+    : '7d';
+
+  const updateFilterParams = useCallback(
+    (updates: { q?: string; status?: StatusFilter; range?: DateRangeFilter }) => {
+      const nextParams = new URLSearchParams(searchParams);
+
+      if (typeof updates.q === 'string') {
+        const trimmed = updates.q.trim();
+
+        if (trimmed.length === 0) {
+          nextParams.delete('q');
+        } else {
+          nextParams.set('q', updates.q);
+        }
+      }
+
+      if (updates.status) {
+        if (updates.status === 'all') {
+          nextParams.delete('status');
+        } else {
+          nextParams.set('status', updates.status);
+        }
+      }
+
+      if (updates.range) {
+        if (updates.range === '7d') {
+          nextParams.delete('range');
+        } else {
+          nextParams.set('range', updates.range);
+        }
+      }
+
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
@@ -167,6 +234,7 @@ export function CallLogsPage() {
 
       const mappedRows = calls.map((call) => {
         const [datePart = '', timePart = ''] = call.startedAt.split(' ');
+        const startedAtDate = parseStartedAt(call.startedAt);
         const agent = agentByName.get(call.agentName);
         const client = agent?.organizationName ?? call.agentName;
 
@@ -174,6 +242,7 @@ export function CallLogsPage() {
           id: call.id,
           date: datePart ? formatDate(datePart) : call.startedAt,
           time: timePart ? formatTime(timePart) : '--:--',
+          startedAtDate,
           client,
           agentName: call.agentName,
           clientId: `#${call.id.replace(/\D/g, '').padStart(6, '0')}`,
@@ -211,15 +280,49 @@ export function CallLogsPage() {
 
   const rows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
+    const now = new Date();
 
-    if (normalized.length === 0) {
-      return logRows;
-    }
+    const daysByRange: Record<Exclude<DateRangeFilter, 'all'>, number> = {
+      '7d': 7,
+      '30d': 30,
+      '90d': 90,
+    };
 
-    return logRows.filter((row) =>
-      [row.client, row.agentName, row.clientId, row.date, row.time].some((value) => value.toLowerCase().includes(normalized)),
-    );
-  }, [query, logRows]);
+    const rangeStart =
+      dateRangeFilter === 'all'
+        ? null
+        : new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysByRange[dateRangeFilter]);
+
+    const matchesSearch = (row: LogRow) =>
+      normalized.length === 0 ||
+      [row.client, row.agentName, row.clientId, row.date, row.time].some((value) => value.toLowerCase().includes(normalized));
+
+    const matchesStatus = (row: LogRow) => statusFilter === 'all' || row.status === statusFilter;
+
+    const matchesDateRange = (row: LogRow) => {
+      if (!rangeStart) {
+        return true;
+      }
+
+      if (!row.startedAtDate) {
+        return false;
+      }
+
+      return row.startedAtDate >= rangeStart;
+    };
+
+    return logRows.filter((row) => matchesSearch(row) && matchesStatus(row) && matchesDateRange(row));
+  }, [query, logRows, statusFilter, dateRangeFilter]);
+
+  useEffect(() => {
+    setExpandedRowId((previous) => {
+      if (previous && rows.some((row) => row.id === previous)) {
+        return previous;
+      }
+
+      return rows[0]?.id ?? '';
+    });
+  }, [rows]);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100dvh', bgcolor: 'background.default' }}>
@@ -334,25 +437,54 @@ export function CallLogsPage() {
                 size="small"
                 placeholder="Search by Client ID or Phone..."
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => updateFilterParams({ q: event.target.value })}
                 InputProps={{ startAdornment: <SearchRoundedIcon fontSize="small" sx={{ mr: 1 }} /> }}
               />
             </Grid2>
 
             <Grid2 size={{ xs: 6, md: 2.4 }}>
-              <Button variant="outlined" fullWidth startIcon={<CalendarTodayRoundedIcon />} endIcon={<KeyboardArrowDownRoundedIcon />}>
-                Last 7 Days
-              </Button>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Date Range"
+                value={dateRangeFilter}
+                onChange={(event) => updateFilterParams({ range: event.target.value as DateRangeFilter })}
+                InputProps={{ startAdornment: <CalendarTodayRoundedIcon fontSize="small" sx={{ mr: 1 }} /> }}
+              >
+                <MenuItem value="7d">Last 7 Days</MenuItem>
+                <MenuItem value="30d">Last 30 Days</MenuItem>
+                <MenuItem value="90d">Last 90 Days</MenuItem>
+                <MenuItem value="all">All Time</MenuItem>
+              </TextField>
             </Grid2>
 
             <Grid2 size={{ xs: 6, md: 2 }}>
-              <Button variant="outlined" fullWidth endIcon={<KeyboardArrowDownRoundedIcon />}>
-                Completed
-              </Button>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Status"
+                value={statusFilter}
+                onChange={(event) => updateFilterParams({ status: event.target.value as StatusFilter })}
+                InputProps={{ endAdornment: <KeyboardArrowDownRoundedIcon fontSize="small" /> }}
+              >
+                <MenuItem value="all">All Statuses</MenuItem>
+                <MenuItem value="success">Success</MenuItem>
+                <MenuItem value="flagged">Flagged</MenuItem>
+                <MenuItem value="failed">Failed</MenuItem>
+              </TextField>
             </Grid2>
 
             <Grid2 size={{ xs: 12, md: 1.6 }}>
-              <Button fullWidth>Clear</Button>
+              <Button
+                fullWidth
+                onClick={() => {
+                  updateFilterParams({ q: '', status: 'all', range: '7d' });
+                }}
+              >
+                Clear
+              </Button>
             </Grid2>
           </Grid2>
         </Paper>
@@ -388,9 +520,21 @@ export function CallLogsPage() {
         <Stack spacing={1.6}>
           {rows.length === 0 ? (
             <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-              <Typography variant="body2" color="text.secondary">
-                No call logs found for the current filters.
-              </Typography>
+              <Stack spacing={1.2}>
+                <Typography variant="body2" color="text.secondary">
+                  No call logs found for the current filters.
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ alignSelf: 'flex-start' }}
+                  onClick={() => {
+                    updateFilterParams({ q: '', status: 'all', range: 'all' });
+                  }}
+                >
+                  Reset Filters
+                </Button>
+              </Stack>
             </Paper>
           ) : null}
 

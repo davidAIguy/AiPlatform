@@ -1,4 +1,4 @@
-import { Alert, Card, CardContent, CircularProgress, Divider, Grid2, Stack, Typography } from '@mui/material';
+import { Alert, Button, Card, CardContent, CircularProgress, Divider, Grid2, Stack, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { StatusChip } from '../components/common/StatusChip';
@@ -10,6 +10,7 @@ export function PortalPage() {
   const [callSessions, setCallSessions] = useState<CallSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -44,7 +45,7 @@ export function PortalPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadToken]);
 
   const portalAgent = useMemo(() => {
     const preferred = agents.find((agent) => agent.organizationName === 'Dental Clinic X');
@@ -84,7 +85,15 @@ export function PortalPage() {
       ) : null}
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 2.2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => setReloadToken((current) => current + 1)}>
+              Retry
+            </Button>
+          }
+        >
           {error}
         </Alert>
       ) : null}

@@ -16,8 +16,33 @@ export interface Agent {
   voiceId: string;
   twilioNumber: string;
   status: AgentStatus;
+  prompt: string;
   promptVersion: string;
   averageLatencyMs: number;
+}
+
+export interface AgentCreateInput {
+  name: string;
+  organizationName: string;
+  model: string;
+  voiceId: string;
+  twilioNumber: string;
+  status: AgentStatus;
+  prompt: string;
+  promptVersion: string;
+  averageLatencyMs: number;
+}
+
+export interface AgentUpdateInput {
+  name?: string;
+  organizationName?: string;
+  model?: string;
+  voiceId?: string;
+  twilioNumber?: string;
+  status?: AgentStatus;
+  prompt?: string;
+  promptVersion?: string;
+  averageLatencyMs?: number;
 }
 
 export interface CallSession {

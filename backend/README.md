@@ -21,9 +21,16 @@ All domain endpoints are currently in-memory scaffolds under `/api`:
 
 - `GET /api/organizations`
 - `GET /api/agents`
+- `POST /api/agents`
+- `PATCH /api/agents/{agent_id}`
+- `DELETE /api/agents/{agent_id}`
 - `GET /api/calls`
 - `GET /api/dashboard/overview`
 - `GET /api/dashboard/usage`
+
+Notes:
+
+- Agent create/update payloads now persist both `prompt` and `promptVersion`.
 
 Quick check:
 

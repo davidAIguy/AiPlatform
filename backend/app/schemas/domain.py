@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -58,8 +59,33 @@ class Agent(ApiSchema):
     voice_id: str
     twilio_number: str
     status: AgentStatus
+    prompt: str
     prompt_version: str
     average_latency_ms: int
+
+
+class AgentCreate(ApiSchema):
+    name: str
+    organization_name: str
+    model: str
+    voice_id: str
+    twilio_number: str
+    status: AgentStatus = AgentStatus.active
+    prompt: str
+    prompt_version: str
+    average_latency_ms: int = 0
+
+
+class AgentUpdate(ApiSchema):
+    name: Optional[str] = None
+    organization_name: Optional[str] = None
+    model: Optional[str] = None
+    voice_id: Optional[str] = None
+    twilio_number: Optional[str] = None
+    status: Optional[AgentStatus] = None
+    prompt: Optional[str] = None
+    prompt_version: Optional[str] = None
+    average_latency_ms: Optional[int] = None
 
 
 class CallSession(ApiSchema):

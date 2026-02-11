@@ -35,6 +35,7 @@ export function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -68,7 +69,7 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadToken]);
 
   const kpi = overview?.kpi;
   const recentSessions = overview?.recentSessions ?? [];
@@ -101,7 +102,15 @@ export function DashboardPage() {
       ) : null}
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 2.2 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2.2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => setReloadToken((current) => current + 1)}>
+              Retry
+            </Button>
+          }
+        >
           {error}
         </Alert>
       ) : null}
