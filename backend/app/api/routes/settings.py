@@ -46,6 +46,7 @@ def get_platform_settings_history(
     actor: Optional[str] = Query(default=None),
     from_date: Optional[str] = Query(default=None, alias="fromDate"),
     to_date: Optional[str] = Query(default=None, alias="toDate"),
+    changed_field: Optional[str] = Query(default=None, alias="changedField"),
 ) -> list[PlatformSettingsAuditEntry]:
     from_ts = _parse_history_timestamp(from_date) if from_date else None
     to_ts = _parse_history_timestamp(to_date) if to_date else None
@@ -57,10 +58,17 @@ def get_platform_settings_history(
         )
 
     normalized_actor = actor.strip().lower() if actor else None
+    normalized_changed_field = changed_field.strip().lower() if changed_field else None
     entries: list[PlatformSettingsAuditEntry] = []
 
     for entry in reversed(mock_data.SETTINGS_AUDIT_LOG):
         if normalized_actor and entry.actor.strip().lower() != normalized_actor:
+            continue
+
+        if normalized_changed_field and not any(
+            field.strip().lower() == normalized_changed_field
+            for field in entry.changed_fields
+        ):
             continue
 
         changed_at_ts = _parse_history_timestamp(entry.changed_at)

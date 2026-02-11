@@ -213,6 +213,21 @@ def test_settings_history_filters_by_actor_and_date() -> None:
     assert len(actor_entries) >= 1
     assert all(entry["actor"] == "history-filter-user" for entry in actor_entries)
 
+    changed_field_response = client.get(
+        "/api/settings/history",
+        params={
+            "changedField": "allowAutoRetryOnFailedCalls",
+            "limit": 10,
+        },
+    )
+    assert changed_field_response.status_code == 200
+    changed_field_entries = changed_field_response.json()
+    assert len(changed_field_entries) >= 1
+    assert all(
+        "allowAutoRetryOnFailedCalls" in entry["changedFields"]
+        for entry in changed_field_entries
+    )
+
     anchor_entry = actor_entries[0]
     date_filtered_response = client.get(
         "/api/settings/history",

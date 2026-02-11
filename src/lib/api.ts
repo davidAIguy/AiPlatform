@@ -144,6 +144,7 @@ export function listPlatformSettingsHistory(filters?: {
   actor?: string;
   fromDate?: string;
   toDate?: string;
+  changedField?: string;
 }) {
   const params = new URLSearchParams();
 
@@ -159,6 +160,10 @@ export function listPlatformSettingsHistory(filters?: {
 
   if (filters?.toDate) {
     params.set('toDate', filters.toDate);
+  }
+
+  if (filters?.changedField) {
+    params.set('changedField', filters.changedField);
   }
 
   return getJson<PlatformSettingsAuditEntry[]>(`/api/settings/history?${params.toString()}`);

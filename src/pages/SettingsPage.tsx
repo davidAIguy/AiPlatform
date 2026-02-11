@@ -83,6 +83,7 @@ export function SettingsPage() {
   const [auditActor, setAuditActor] = useState(DEFAULT_AUDIT_ACTOR);
   const [changeReason, setChangeReason] = useState('');
   const [historyActorFilter, setHistoryActorFilter] = useState('all');
+  const [historyFieldFilter, setHistoryFieldFilter] = useState('all');
   const [historyFromDate, setHistoryFromDate] = useState('');
   const [historyToDate, setHistoryToDate] = useState('');
 
@@ -161,6 +162,7 @@ export function SettingsPage() {
         const nextHistory = await listPlatformSettingsHistory({
           limit: HISTORY_LIMIT,
           actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
+          changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
           fromDate: historyFromDate ? toRangeStart(historyFromDate) : undefined,
           toDate: historyToDate ? toRangeEnd(historyToDate) : undefined,
         });
@@ -189,7 +191,7 @@ export function SettingsPage() {
     return () => {
       active = false;
     };
-  }, [reloadToken, historyActorFilter, historyFromDate, historyToDate, invalidHistoryDateRange]);
+  }, [reloadToken, historyActorFilter, historyFieldFilter, historyFromDate, historyToDate, invalidHistoryDateRange]);
 
   const integrationRows = useMemo(() => {
     if (!settings) {
@@ -213,6 +215,7 @@ export function SettingsPage() {
     playLatencyFillerPhraseOnTimeout: 'Latency Filler',
     allowAutoRetryOnFailedCalls: 'Auto Retry',
   };
+  const historyFieldOptions = Object.keys(fieldLabels);
 
   function formatHistoryDate(value: string): string {
     const parsed = new Date(value);
@@ -261,6 +264,7 @@ export function SettingsPage() {
       const updatedHistory = await listPlatformSettingsHistory({
         limit: HISTORY_LIMIT,
         actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
+        changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
         fromDate: invalidHistoryDateRange || !historyFromDate ? undefined : toRangeStart(historyFromDate),
         toDate: invalidHistoryDateRange || !historyToDate ? undefined : toRangeEnd(historyToDate),
       });
@@ -474,6 +478,22 @@ export function SettingsPage() {
                     </TextField>
 
                     <TextField
+                      select
+                      size="small"
+                      label="Field"
+                      value={historyFieldFilter}
+                      onChange={(event) => setHistoryFieldFilter(event.target.value)}
+                      sx={{ minWidth: 190 }}
+                    >
+                      <MenuItem value="all">All Fields</MenuItem>
+                      {historyFieldOptions.map((field) => (
+                        <MenuItem key={field} value={field}>
+                          {fieldLabels[field] ?? field}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+
+                    <TextField
                       size="small"
                       type="date"
                       label="From"
@@ -496,6 +516,7 @@ export function SettingsPage() {
                       variant="outlined"
                       onClick={() => {
                         setHistoryActorFilter('all');
+                        setHistoryFieldFilter('all');
                         setHistoryFromDate('');
                         setHistoryToDate('');
                       }}
