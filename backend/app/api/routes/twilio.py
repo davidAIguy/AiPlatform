@@ -45,6 +45,19 @@ def _next_call_id(db: Session) -> str:
     return f"call-{current_total + 1}"
 
 
+def _public_url_for(request: Request, route_name: str) -> str:
+    raw_url = str(request.url_for(route_name))
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+
+    if forwarded_proto == "https" and raw_url.startswith("http://"):
+        return raw_url.replace("http://", "https://", 1)
+
+    if raw_url.startswith("http://"):
+        return raw_url.replace("http://", "https://", 1)
+
+    return raw_url
+
+
 @router.post("/voice")
 def inbound_voice_webhook(
     request: Request,
@@ -72,8 +85,8 @@ def inbound_voice_webhook(
         )
         db.commit()
 
-    recording_callback_url = str(request.url_for("recording_status_webhook"))
-    voice_finish_url = str(request.url_for("voice_finish_webhook"))
+    recording_callback_url = _public_url_for(request, "recording_status_webhook")
+    voice_finish_url = _public_url_for(request, "voice_finish_webhook")
 
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
