@@ -539,7 +539,7 @@ def test_update_settings_rejects_invalid_keys() -> None:
     response = client.patch(
         "/api/settings",
         json={
-            "openaiApiKey": "invalid-key",
+            "openaiApiKey": "",
         },
         headers=admin_headers,
     )

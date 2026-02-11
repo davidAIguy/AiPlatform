@@ -120,10 +120,9 @@ class PlatformSettings(ApiSchema):
     @field_validator("openai_api_key")
     @classmethod
     def validate_openai_api_key(cls, value: str) -> str:
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            OPENAI_KEY_PATTERN,
-            "openaiApiKey must start with 'sk-' and contain at least 10 additional characters",
+            "openaiApiKey cannot be empty",
         )
 
     @field_validator("deepgram_api_key")
@@ -137,10 +136,9 @@ class PlatformSettings(ApiSchema):
     @field_validator("twilio_account_sid")
     @classmethod
     def validate_twilio_account_sid(cls, value: str) -> str:
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            TWILIO_SID_PATTERN,
-            "twilioAccountSid must start with 'AC' and contain at least 10 additional characters",
+            "twilioAccountSid cannot be empty",
         )
 
     @field_validator("rime_api_key")
@@ -169,10 +167,9 @@ class PlatformSettingsUpdate(ApiSchema):
         if value is None:
             return value
 
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            OPENAI_KEY_PATTERN,
-            "openaiApiKey must start with 'sk-' and contain at least 10 additional characters",
+            "openaiApiKey cannot be empty",
         )
 
     @field_validator("deepgram_api_key")
@@ -192,10 +189,9 @@ class PlatformSettingsUpdate(ApiSchema):
         if value is None:
             return value
 
-        return _require_pattern(
+        return _require_non_empty(
             value,
-            TWILIO_SID_PATTERN,
-            "twilioAccountSid must start with 'AC' and contain at least 10 additional characters",
+            "twilioAccountSid cannot be empty",
         )
 
     @field_validator("rime_api_key")

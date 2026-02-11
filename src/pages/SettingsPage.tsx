@@ -31,9 +31,9 @@ import {
   PlatformSettingsHistoryMeta,
 } from '../types/domain';
 
-const OPENAI_KEY_PATTERN = /^sk-[A-Za-z0-9*._-]{10,}$/;
+const OPENAI_KEY_PATTERN = /\S+/;
 const DEEPGRAM_KEY_PATTERN = /\S+/;
-const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
+const TWILIO_SID_PATTERN = /\S+/;
 const RIME_KEY_PATTERN = /\S+/;
 const HISTORY_LIMIT = 8;
 const HISTORY_FETCH_LIMIT = HISTORY_LIMIT + 1;
@@ -76,13 +76,13 @@ function validateSettingsKeys(settings: PlatformSettings | null): SettingsValida
   return {
     openaiApiKey: OPENAI_KEY_PATTERN.test(settings.openaiApiKey)
       ? null
-      : "Must start with 'sk-' and include at least 10 more characters.",
+      : 'OpenAI key cannot be empty.',
     deepgramApiKey: DEEPGRAM_KEY_PATTERN.test(settings.deepgramApiKey)
       ? null
       : 'Deepgram key cannot be empty.',
     twilioAccountSid: TWILIO_SID_PATTERN.test(settings.twilioAccountSid)
       ? null
-      : "Must start with 'AC' and include at least 10 more characters.",
+      : 'Twilio SID cannot be empty.',
     rimeApiKey: RIME_KEY_PATTERN.test(settings.rimeApiKey)
       ? null
       : 'Rime key cannot be empty.',
@@ -412,7 +412,7 @@ export function SettingsPage() {
                   value={settings?.openaiApiKey ?? ''}
                   onChange={(event) => updateField('openaiApiKey', event.target.value)}
                   error={Boolean(validationErrors.openaiApiKey)}
-                  helperText={validationErrors.openaiApiKey ?? 'Expected: sk-...'}
+                  helperText={validationErrors.openaiApiKey ?? 'Any non-empty key'}
                   fullWidth
                 />
                 <TextField
@@ -428,7 +428,7 @@ export function SettingsPage() {
                   value={settings?.twilioAccountSid ?? ''}
                   onChange={(event) => updateField('twilioAccountSid', event.target.value)}
                   error={Boolean(validationErrors.twilioAccountSid)}
-                  helperText={validationErrors.twilioAccountSid ?? 'Expected: AC...'}
+                  helperText={validationErrors.twilioAccountSid ?? 'Any non-empty key'}
                   fullWidth
                 />
                 <TextField
