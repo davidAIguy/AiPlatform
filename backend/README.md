@@ -30,6 +30,7 @@ All domain endpoints are currently in-memory scaffolds under `/api`:
 - `GET /api/settings`
 - `PATCH /api/settings`
 - `GET /api/settings/history`
+- `GET /api/settings/history/meta`
 
 Notes:
 
@@ -38,6 +39,7 @@ Notes:
 - Settings history is tracked in-memory with changed field names and timestamp.
 - Settings updates can include `auditActor` and `changeReason`, which are stored in history.
 - Settings history supports pagination/filter query params: `limit`, `offset`, `actor`, `fromDate`, `toDate`, and `changedField`.
+- Settings history metadata endpoint returns available actors/fields plus totals for richer filter UIs.
 
 Quick check:
 

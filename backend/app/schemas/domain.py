@@ -215,6 +215,14 @@ class PlatformSettingsAuditEntry(ApiSchema):
     changed_fields: list[str]
 
 
+class PlatformSettingsHistoryMeta(ApiSchema):
+    actors: list[str]
+    changed_fields: list[str]
+    total_entries: int
+    earliest_changed_at: Optional[str] = None
+    latest_changed_at: Optional[str] = None
+
+
 class CallSession(ApiSchema):
     id: str
     agent_name: str

@@ -7,6 +7,7 @@ import {
   Organization,
   PlatformSettings,
   PlatformSettingsAuditEntry,
+  PlatformSettingsHistoryMeta,
   PlatformSettingsUpdateInput,
 } from '../types/domain';
 
@@ -172,4 +173,22 @@ export function listPlatformSettingsHistory(filters?: {
   }
 
   return getJson<PlatformSettingsAuditEntry[]>(`/api/settings/history?${params.toString()}`);
+}
+
+export function getPlatformSettingsHistoryMeta(filters?: {
+  fromDate?: string;
+  toDate?: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (filters?.fromDate) {
+    params.set('fromDate', filters.fromDate);
+  }
+
+  if (filters?.toDate) {
+    params.set('toDate', filters.toDate);
+  }
+
+  const query = params.toString();
+  return getJson<PlatformSettingsHistoryMeta>(`/api/settings/history/meta${query ? `?${query}` : ''}`);
 }

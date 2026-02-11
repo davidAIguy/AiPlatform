@@ -113,3 +113,11 @@ export interface PlatformSettingsAuditEntry {
   reason?: string;
   changedFields: string[];
 }
+
+export interface PlatformSettingsHistoryMeta {
+  actors: string[];
+  changedFields: string[];
+  totalEntries: number;
+  earliestChangedAt?: string;
+  latestChangedAt?: string;
+}

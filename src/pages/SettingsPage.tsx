@@ -18,8 +18,17 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { StatusChip } from '../components/common/StatusChip';
-import { getPlatformSettings, listPlatformSettingsHistory, updatePlatformSettings } from '../lib/api';
-import { PlatformSettings, PlatformSettingsAuditEntry } from '../types/domain';
+import {
+  getPlatformSettings,
+  getPlatformSettingsHistoryMeta,
+  listPlatformSettingsHistory,
+  updatePlatformSettings,
+} from '../lib/api';
+import {
+  PlatformSettings,
+  PlatformSettingsAuditEntry,
+  PlatformSettingsHistoryMeta,
+} from '../types/domain';
 
 const OPENAI_KEY_PATTERN = /^sk-[A-Za-z0-9*._-]{10,}$/;
 const DEEPGRAM_KEY_PATTERN = /^dg-[A-Za-z0-9*._-]{8,}$/;
@@ -28,6 +37,15 @@ const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
 const HISTORY_LIMIT = 8;
 const HISTORY_FETCH_LIMIT = HISTORY_LIMIT + 1;
 const DEFAULT_AUDIT_ACTOR = 'platform-admin';
+const FIELD_LABELS: Record<string, string> = {
+  openaiApiKey: 'OpenAI Key',
+  deepgramApiKey: 'Deepgram Key',
+  twilioAccountSid: 'Twilio SID',
+  rimeApiKey: 'Rime Key',
+  enableBargeInInterruption: 'Barge-in',
+  playLatencyFillerPhraseOnTimeout: 'Latency Filler',
+  allowAutoRetryOnFailedCalls: 'Auto Retry',
+};
 
 function toRangeStart(value: string): string {
   return `${value}T00:00:00Z`;
@@ -73,6 +91,7 @@ function validateSettingsKeys(settings: PlatformSettings | null): SettingsValida
 export function SettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [history, setHistory] = useState<PlatformSettingsAuditEntry[]>([]);
+  const [historyMeta, setHistoryMeta] = useState<PlatformSettingsHistoryMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -102,14 +121,14 @@ export function SettingsPage() {
   );
 
   const actorOptions = useMemo(() => {
-    const uniqueActors = Array.from(new Set(history.map((entry) => entry.actor)));
+    const availableActors = historyMeta?.actors ?? [];
 
-    if (historyActorFilter !== 'all' && !uniqueActors.includes(historyActorFilter)) {
-      return [historyActorFilter, ...uniqueActors];
+    if (historyActorFilter !== 'all' && !availableActors.includes(historyActorFilter)) {
+      return [historyActorFilter, ...availableActors];
     }
 
-    return uniqueActors;
-  }, [history, historyActorFilter]);
+    return availableActors;
+  }, [historyMeta, historyActorFilter]);
 
   useEffect(() => {
     let active = true;
@@ -153,6 +172,7 @@ export function SettingsPage() {
     async function loadHistory() {
       if (invalidHistoryDateRange) {
         setHistory([]);
+        setHistoryMeta(null);
         setHistoryHasNextPage(false);
         setHistoryError('From date must be before or equal to To date.');
         setHistoryLoading(false);
@@ -163,20 +183,30 @@ export function SettingsPage() {
       setHistoryError(null);
 
       try {
-        const nextHistory = await listPlatformSettingsHistory({
-          limit: HISTORY_FETCH_LIMIT,
-          offset: historyPage * HISTORY_LIMIT,
-          actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
-          changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
-          fromDate: historyFromDate ? toRangeStart(historyFromDate) : undefined,
-          toDate: historyToDate ? toRangeEnd(historyToDate) : undefined,
-        });
+        const fromDate = historyFromDate ? toRangeStart(historyFromDate) : undefined;
+        const toDate = historyToDate ? toRangeEnd(historyToDate) : undefined;
+
+        const [nextHistory, nextHistoryMeta] = await Promise.all([
+          listPlatformSettingsHistory({
+            limit: HISTORY_FETCH_LIMIT,
+            offset: historyPage * HISTORY_LIMIT,
+            actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
+            changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
+            fromDate,
+            toDate,
+          }),
+          getPlatformSettingsHistoryMeta({
+            fromDate,
+            toDate,
+          }),
+        ]);
 
         if (!active) {
           return;
         }
 
         setHistory(nextHistory.slice(0, HISTORY_LIMIT));
+        setHistoryMeta(nextHistoryMeta);
         setHistoryHasNextPage(nextHistory.length > HISTORY_LIMIT);
       } catch (error) {
         if (!active) {
@@ -186,6 +216,7 @@ export function SettingsPage() {
         const message = error instanceof Error ? error.message : 'Unexpected error while loading settings history.';
         setHistoryError(message);
         setHistory([]);
+        setHistoryMeta(null);
         setHistoryHasNextPage(false);
       } finally {
         if (active) {
@@ -214,16 +245,16 @@ export function SettingsPage() {
     ] as const;
   }, [settings, validationErrors]);
 
-  const fieldLabels: Record<string, string> = {
-    openaiApiKey: 'OpenAI Key',
-    deepgramApiKey: 'Deepgram Key',
-    twilioAccountSid: 'Twilio SID',
-    rimeApiKey: 'Rime Key',
-    enableBargeInInterruption: 'Barge-in',
-    playLatencyFillerPhraseOnTimeout: 'Latency Filler',
-    allowAutoRetryOnFailedCalls: 'Auto Retry',
-  };
-  const historyFieldOptions = Object.keys(fieldLabels);
+  const historyFieldOptions = useMemo(() => {
+    const fallbackFields = Object.keys(FIELD_LABELS);
+    const availableFields = historyMeta?.changedFields.length ? historyMeta.changedFields : fallbackFields;
+
+    if (historyFieldFilter !== 'all' && !availableFields.includes(historyFieldFilter)) {
+      return [historyFieldFilter, ...availableFields];
+    }
+
+    return availableFields;
+  }, [historyMeta, historyFieldFilter]);
 
   function formatHistoryDate(value: string): string {
     const parsed = new Date(value);
@@ -269,16 +300,25 @@ export function SettingsPage() {
         auditActor: auditActor.trim() || DEFAULT_AUDIT_ACTOR,
         changeReason: changeReason.trim() || undefined,
       });
-      const updatedHistory = await listPlatformSettingsHistory({
-        limit: HISTORY_FETCH_LIMIT,
-        offset: 0,
-        actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
-        changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
-        fromDate: invalidHistoryDateRange || !historyFromDate ? undefined : toRangeStart(historyFromDate),
-        toDate: invalidHistoryDateRange || !historyToDate ? undefined : toRangeEnd(historyToDate),
-      });
+      const fromDate = invalidHistoryDateRange || !historyFromDate ? undefined : toRangeStart(historyFromDate);
+      const toDate = invalidHistoryDateRange || !historyToDate ? undefined : toRangeEnd(historyToDate);
+      const [updatedHistory, updatedHistoryMeta] = await Promise.all([
+        listPlatformSettingsHistory({
+          limit: HISTORY_FETCH_LIMIT,
+          offset: 0,
+          actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
+          changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
+          fromDate,
+          toDate,
+        }),
+        getPlatformSettingsHistoryMeta({
+          fromDate,
+          toDate,
+        }),
+      ]);
       setSettings(updated);
       setHistory(updatedHistory.slice(0, HISTORY_LIMIT));
+      setHistoryMeta(updatedHistoryMeta);
       setHistoryHasNextPage(updatedHistory.length > HISTORY_LIMIT);
       setHistoryPage(0);
       setHistoryError(null);
@@ -505,7 +545,7 @@ export function SettingsPage() {
                       <MenuItem value="all">All Fields</MenuItem>
                       {historyFieldOptions.map((field) => (
                         <MenuItem key={field} value={field}>
-                          {fieldLabels[field] ?? field}
+                          {FIELD_LABELS[field] ?? field}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -552,6 +592,7 @@ export function SettingsPage() {
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography variant="caption" color="text.secondary">
                       Page {historyPage + 1}
+                      {historyMeta ? ` • ${historyMeta.totalEntries} matching` : ''}
                     </Typography>
 
                     <Stack direction="row" spacing={1}>
@@ -610,7 +651,7 @@ export function SettingsPage() {
 
                       <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
                         {entry.changedFields.map((field) => (
-                          <Chip key={`${entry.id}-${field}`} size="small" label={fieldLabels[field] ?? field} />
+                          <Chip key={`${entry.id}-${field}`} size="small" label={FIELD_LABELS[field] ?? field} />
                         ))}
                       </Stack>
 

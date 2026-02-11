@@ -7,6 +7,7 @@ from backend.app.api import mock_data
 from backend.app.schemas import (
     PlatformSettings,
     PlatformSettingsAuditEntry,
+    PlatformSettingsHistoryMeta,
     PlatformSettingsUpdate,
 )
 
@@ -35,29 +36,12 @@ def _parse_history_timestamp(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-@router.get("", response_model=PlatformSettings)
-def get_platform_settings() -> PlatformSettings:
-    return mock_data.PLATFORM_SETTINGS
-
-
-@router.get("/history", response_model=list[PlatformSettingsAuditEntry])
-def get_platform_settings_history(
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    actor: Optional[str] = Query(default=None),
-    from_date: Optional[str] = Query(default=None, alias="fromDate"),
-    to_date: Optional[str] = Query(default=None, alias="toDate"),
-    changed_field: Optional[str] = Query(default=None, alias="changedField"),
+def _filter_history_entries(
+    actor: Optional[str],
+    changed_field: Optional[str],
+    from_ts: Optional[datetime],
+    to_ts: Optional[datetime],
 ) -> list[PlatformSettingsAuditEntry]:
-    from_ts = _parse_history_timestamp(from_date) if from_date else None
-    to_ts = _parse_history_timestamp(to_date) if to_date else None
-
-    if from_ts and to_ts and from_ts > to_ts:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="fromDate must be less than or equal to toDate",
-        )
-
     normalized_actor = actor.strip().lower() if actor else None
     normalized_changed_field = changed_field.strip().lower() if changed_field else None
     entries: list[PlatformSettingsAuditEntry] = []
@@ -82,7 +66,72 @@ def get_platform_settings_history(
 
         entries.append(entry)
 
+    return entries
+
+
+@router.get("", response_model=PlatformSettings)
+def get_platform_settings() -> PlatformSettings:
+    return mock_data.PLATFORM_SETTINGS
+
+
+@router.get("/history", response_model=list[PlatformSettingsAuditEntry])
+def get_platform_settings_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    actor: Optional[str] = Query(default=None),
+    from_date: Optional[str] = Query(default=None, alias="fromDate"),
+    to_date: Optional[str] = Query(default=None, alias="toDate"),
+    changed_field: Optional[str] = Query(default=None, alias="changedField"),
+) -> list[PlatformSettingsAuditEntry]:
+    from_ts = _parse_history_timestamp(from_date) if from_date else None
+    to_ts = _parse_history_timestamp(to_date) if to_date else None
+
+    if from_ts and to_ts and from_ts > to_ts:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="fromDate must be less than or equal to toDate",
+        )
+
+    entries = _filter_history_entries(actor, changed_field, from_ts, to_ts)
+
     return entries[offset : offset + limit]
+
+
+@router.get("/history/meta", response_model=PlatformSettingsHistoryMeta)
+def get_platform_settings_history_meta(
+    from_date: Optional[str] = Query(default=None, alias="fromDate"),
+    to_date: Optional[str] = Query(default=None, alias="toDate"),
+) -> PlatformSettingsHistoryMeta:
+    from_ts = _parse_history_timestamp(from_date) if from_date else None
+    to_ts = _parse_history_timestamp(to_date) if to_date else None
+
+    if from_ts and to_ts and from_ts > to_ts:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="fromDate must be less than or equal to toDate",
+        )
+
+    entries = _filter_history_entries(
+        actor=None,
+        changed_field=None,
+        from_ts=from_ts,
+        to_ts=to_ts,
+    )
+
+    actor_set = {entry.actor for entry in entries}
+    changed_field_set = {
+        changed_field
+        for entry in entries
+        for changed_field in entry.changed_fields
+    }
+
+    return PlatformSettingsHistoryMeta(
+        actors=sorted(actor_set),
+        changed_fields=sorted(changed_field_set),
+        total_entries=len(entries),
+        earliest_changed_at=entries[-1].changed_at if entries else None,
+        latest_changed_at=entries[0].changed_at if entries else None,
+    )
 
 
 @router.patch("", response_model=PlatformSettings)

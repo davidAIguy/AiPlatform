@@ -189,6 +189,18 @@ def test_settings_history_endpoint() -> None:
     assert "changedFields" in entries[0]
 
 
+def test_settings_history_meta_endpoint() -> None:
+    response = client.get("/api/settings/history/meta")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "actors" in payload
+    assert "changedFields" in payload
+    assert "totalEntries" in payload
+    assert isinstance(payload["actors"], list)
+    assert isinstance(payload["changedFields"], list)
+
+
 def test_settings_history_filters_by_actor_and_date() -> None:
     current_settings_response = client.get("/api/settings")
     assert current_settings_response.status_code == 200
