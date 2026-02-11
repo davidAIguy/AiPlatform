@@ -69,7 +69,33 @@ curl -X POST https://<api-url>/api/auth/login \
   -d '{"email":"admin@voicenexus.ai","password":"admin123"}'
 ```
 
-## 5) CI and E2E
+## 5) Twilio inbound call flow test
+
+In Twilio Console:
+
+1. Open **Phone Numbers** -> your number.
+2. Voice webhook URL:
+
+```text
+https://<api-url>/api/twilio/voice
+```
+
+3. Voice webhook method: **HTTP POST**.
+4. Status callback URL:
+
+```text
+https://<api-url>/api/twilio/status
+```
+
+5. Status callback events: at least `completed` and `answered`.
+
+Then place a call to the Twilio number and verify on web:
+
+- new entry appears in `/call-logs`
+- completed/busy/failed status is reflected after callback
+- duration updates after call ends
+
+## 6) CI and E2E
 
 GitHub Actions already runs:
 

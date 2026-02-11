@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 
@@ -12,6 +13,12 @@ settings = get_settings()
 
 def _build_engine() -> tuple:
     database_url = settings.database_url
+
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgresql://") and "+" not in database_url.split("://", 1)[0]:
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     engine = create_engine(database_url, future=True, connect_args=connect_args)
 
@@ -57,6 +64,22 @@ class SettingsAuditRecord(Base):
     changed_fields = mapped_column(JSON, nullable=False)
 
 
+class CallSessionRecord(Base):
+    __tablename__ = "call_sessions"
+
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    call_id = mapped_column(String(64), unique=True, nullable=False)
+    call_sid = mapped_column(String(128), unique=True, nullable=False)
+    agent_name = mapped_column(String(255), nullable=False)
+    caller_number = mapped_column(String(64), nullable=False)
+    started_at = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_seconds = mapped_column(Integer, nullable=False, default=0)
+    status = mapped_column(String(32), nullable=False)
+    sentiment = mapped_column(String(32), nullable=False, default="neutral")
+    recording_url = mapped_column(Text, nullable=False, default="")
+    updated_at = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 _ensure_sqlite_parent_dir()
 engine, _ = _build_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -72,8 +95,6 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def initialize_database() -> None:
-    from datetime import datetime, timezone
-
     Base.metadata.create_all(bind=engine)
 
     with SessionLocal() as db:
@@ -106,6 +127,28 @@ def initialize_database() -> None:
                         actor=seed_entry.actor,
                         reason=seed_entry.reason,
                         changed_fields=seed_entry.changed_fields,
+                    )
+                )
+
+        calls_exist = db.query(CallSessionRecord).first()
+
+        if calls_exist is None:
+            for call in mock_data.CALL_SESSIONS:
+                parsed_started_at = datetime.strptime(call.started_at, "%Y-%m-%d %H:%M").replace(
+                    tzinfo=timezone.utc
+                )
+                db.add(
+                    CallSessionRecord(
+                        call_id=call.id,
+                        call_sid=f"seed-{call.id}",
+                        agent_name=call.agent_name,
+                        caller_number=call.caller_number,
+                        started_at=parsed_started_at,
+                        duration_seconds=call.duration_seconds,
+                        status=call.status,
+                        sentiment=call.sentiment,
+                        recording_url=call.recording_url,
+                        updated_at=datetime.now(timezone.utc),
                     )
                 )
 

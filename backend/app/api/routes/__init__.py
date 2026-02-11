@@ -5,6 +5,7 @@ from backend.app.api.routes.dashboard import router as dashboard_router
 from backend.app.api.routes.health import router as health_router
 from backend.app.api.routes.organizations import router as organizations_router
 from backend.app.api.routes.settings import router as settings_router
+from backend.app.api.routes.twilio import router as twilio_router
 
 __all__ = [
     "agents_router",
@@ -14,4 +15,5 @@ __all__ = [
     "health_router",
     "organizations_router",
     "settings_router",
+    "twilio_router",
 ]

@@ -11,6 +11,7 @@ from backend.app.api.routes import (
     health_router,
     organizations_router,
     settings_router,
+    twilio_router,
 )
 from backend.app.core.settings import get_settings
 from backend.app.db import initialize_database
@@ -46,3 +47,4 @@ app.include_router(agents_router, prefix="/api")
 app.include_router(calls_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(twilio_router, prefix="/api")

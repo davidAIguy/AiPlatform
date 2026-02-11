@@ -1,6 +1,8 @@
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
-from backend.app.db import initialize_database
+from backend.app.db import CallSessionRecord, SessionLocal, initialize_database
 from backend.app.main import app
 
 
@@ -163,6 +165,59 @@ def test_calls_endpoint_with_limit() -> None:
     calls = response.json()
     assert len(calls) == 2
     assert "agentName" in calls[0]
+
+
+def test_twilio_voice_webhook_creates_call_session() -> None:
+    call_sid = f"CA-test-{uuid4().hex[:12]}"
+
+    response = client.post(
+        "/api/twilio/voice",
+        data={
+            "CallSid": call_sid,
+            "From": "+14155559000",
+            "To": "+14155551042",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "<Response>" in response.text
+
+    with SessionLocal() as db:
+        created = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
+        assert created is not None
+        assert created.caller_number == "+14155559000"
+
+
+def test_twilio_status_webhook_updates_existing_call() -> None:
+    call_sid = f"CA-test-{uuid4().hex[:12]}"
+    voice_response = client.post(
+        "/api/twilio/voice",
+        data={
+            "CallSid": call_sid,
+            "From": "+14155550111",
+            "To": "+14155551042",
+        },
+    )
+    assert voice_response.status_code == 200
+
+    status_response = client.post(
+        "/api/twilio/status",
+        data={
+            "CallSid": call_sid,
+            "CallStatus": "completed",
+            "CallDuration": "31",
+            "RecordingUrl": "https://example.com/recordings/call.wav",
+        },
+    )
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "ok"
+
+    with SessionLocal() as db:
+        updated = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
+        assert updated is not None
+        assert updated.status == "completed"
+        assert updated.duration_seconds == 31
+        assert updated.recording_url == "https://example.com/recordings/call.wav"
 
 
 def test_dashboard_overview_endpoint() -> None:
