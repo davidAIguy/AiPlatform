@@ -25,6 +25,7 @@ const DEEPGRAM_KEY_PATTERN = /^dg-[A-Za-z0-9*._-]{8,}$/;
 const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
 const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
 const HISTORY_LIMIT = 8;
+const DEFAULT_AUDIT_ACTOR = 'platform-admin';
 
 interface SettingsValidationErrors {
   openaiApiKey: string | null;
@@ -68,6 +69,8 @@ export function SettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [auditActor, setAuditActor] = useState(DEFAULT_AUDIT_ACTOR);
+  const [changeReason, setChangeReason] = useState('');
 
   const validationErrors = useMemo(() => validateSettingsKeys(settings), [settings]);
   const hasValidationErrors = useMemo(
@@ -177,11 +180,16 @@ export function SettingsPage() {
     setSaveSuccess(null);
 
     try {
-      const updated = await updatePlatformSettings(settings);
+      const updated = await updatePlatformSettings({
+        ...settings,
+        auditActor: auditActor.trim() || DEFAULT_AUDIT_ACTOR,
+        changeReason: changeReason.trim() || undefined,
+      });
       const updatedHistory = await listPlatformSettingsHistory(HISTORY_LIMIT);
       setSettings(updated);
       setHistory(updatedHistory);
       setSaveSuccess('Platform settings saved successfully.');
+      setChangeReason('');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected error while saving platform settings.';
       setSaveError(message);
@@ -338,6 +346,26 @@ export function SettingsPage() {
                     }
                     label="Allow auto-retry on failed calls"
                   />
+
+                  <Divider />
+
+                  <TextField
+                    label="Audit Actor"
+                    value={auditActor}
+                    onChange={(event) => setAuditActor(event.target.value)}
+                    helperText="Recorded in settings history"
+                    fullWidth
+                  />
+
+                  <TextField
+                    label="Change Reason (optional)"
+                    value={changeReason}
+                    onChange={(event) => setChangeReason(event.target.value)}
+                    placeholder="Describe why this update is needed"
+                    multiline
+                    minRows={2}
+                    fullWidth
+                  />
                 </Stack>
               </CardContent>
             </Card>
@@ -363,6 +391,12 @@ export function SettingsPage() {
                         </Typography>
                         <Chip size="small" label={entry.actor} variant="outlined" />
                       </Stack>
+
+                      {entry.reason ? (
+                        <Typography variant="caption" color="text.secondary">
+                          {entry.reason}
+                        </Typography>
+                      ) : null}
 
                       <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
                         {entry.changedFields.map((field) => (

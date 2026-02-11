@@ -102,11 +102,14 @@ export interface PlatformSettingsUpdateInput {
   enableBargeInInterruption?: boolean;
   playLatencyFillerPhraseOnTimeout?: boolean;
   allowAutoRetryOnFailedCalls?: boolean;
+  auditActor?: string;
+  changeReason?: string;
 }
 
 export interface PlatformSettingsAuditEntry {
   id: string;
   changedAt: string;
   actor: string;
+  reason?: string;
   changedFields: string[];
 }

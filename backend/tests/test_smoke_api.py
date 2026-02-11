@@ -199,6 +199,8 @@ def test_update_settings_endpoint() -> None:
         json={
             "allowAutoRetryOnFailedCalls": True,
             "playLatencyFillerPhraseOnTimeout": False,
+            "auditActor": "qa-admin",
+            "changeReason": "Enable retries for resilience test.",
         },
     )
 
@@ -213,8 +215,36 @@ def test_update_settings_endpoint() -> None:
     assert len(after_entries) == len(before_entries) + 1
 
     latest_entry = after_entries[0]
+    assert latest_entry["actor"] == "qa-admin"
+    assert latest_entry["reason"] == "Enable retries for resilience test."
     assert "allowAutoRetryOnFailedCalls" in latest_entry["changedFields"]
     assert "playLatencyFillerPhraseOnTimeout" in latest_entry["changedFields"]
+
+
+def test_update_settings_without_changes_does_not_append_history() -> None:
+    baseline_response = client.get("/api/settings")
+    assert baseline_response.status_code == 200
+    baseline_settings = baseline_response.json()
+
+    before_history_response = client.get("/api/settings/history")
+    assert before_history_response.status_code == 200
+    before_entries = before_history_response.json()
+
+    update_response = client.patch(
+        "/api/settings",
+        json={
+            "allowAutoRetryOnFailedCalls": baseline_settings["allowAutoRetryOnFailedCalls"],
+            "auditActor": "qa-admin",
+            "changeReason": "No-op verification",
+        },
+    )
+    assert update_response.status_code == 200
+
+    after_history_response = client.get("/api/settings/history")
+    assert after_history_response.status_code == 200
+    after_entries = after_history_response.json()
+
+    assert len(after_entries) == len(before_entries)
 
 
 def test_update_settings_rejects_invalid_keys() -> None:

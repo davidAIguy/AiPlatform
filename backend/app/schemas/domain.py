@@ -155,6 +155,8 @@ class PlatformSettingsUpdate(ApiSchema):
     enable_barge_in_interruption: Optional[bool] = None
     play_latency_filler_phrase_on_timeout: Optional[bool] = None
     allow_auto_retry_on_failed_calls: Optional[bool] = None
+    audit_actor: Optional[str] = None
+    change_reason: Optional[str] = None
 
     @field_validator("openai_api_key")
     @classmethod
@@ -209,6 +211,7 @@ class PlatformSettingsAuditEntry(ApiSchema):
     id: str
     changed_at: str
     actor: str
+    reason: Optional[str] = None
     changed_fields: list[str]
 
 

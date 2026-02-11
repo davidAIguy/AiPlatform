@@ -32,6 +32,10 @@ def get_platform_settings_history(
 @router.patch("", response_model=PlatformSettings)
 def update_platform_settings(payload: PlatformSettingsUpdate) -> PlatformSettings:
     updates = payload.model_dump(exclude_unset=True)
+    actor = (updates.pop("audit_actor", None) or "platform-admin").strip() or "platform-admin"
+    reason = updates.pop("change_reason", None)
+    normalized_reason = reason.strip() if isinstance(reason, str) and reason.strip() else None
+
     changed_fields = [
         field
         for field, value in updates.items()
@@ -47,7 +51,8 @@ def update_platform_settings(payload: PlatformSettingsUpdate) -> PlatformSetting
                 changed_at=datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
-                actor="platform-admin",
+                actor=actor,
+                reason=normalized_reason,
                 changed_fields=[_to_camel(field) for field in changed_fields],
             )
         )

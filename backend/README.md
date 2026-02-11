@@ -36,6 +36,7 @@ Notes:
 - Agent create/update payloads now persist both `prompt` and `promptVersion`.
 - Settings keys are validated on update (`sk-` OpenAI, `dg-` Deepgram, `AC` Twilio SID, `rm-` Rime).
 - Settings history is tracked in-memory with changed field names and timestamp.
+- Settings updates can include `auditActor` and `changeReason`, which are stored in history.
 
 Quick check:
 

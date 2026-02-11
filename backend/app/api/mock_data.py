@@ -196,6 +196,7 @@ SETTINGS_AUDIT_LOG: list[PlatformSettingsAuditEntry] = [
         id="settings-audit-1",
         changed_at="2026-02-10T09:00:00Z",
         actor="system-bootstrap",
+        reason="Initial platform defaults loaded.",
         changed_fields=[
             "openaiApiKey",
             "deepgramApiKey",
