@@ -1,0 +1,168 @@
+from backend.app.schemas import Agent, CallSession, Organization, RecentSession, UsagePoint
+
+ORGANIZATIONS: list[Organization] = [
+    Organization(
+        id="org-1",
+        name="Dental Clinic X",
+        subscription_status="active",
+        active_agents=2,
+        monthly_minutes=1823,
+    ),
+    Organization(
+        id="org-2",
+        name="Prime Auto Group",
+        subscription_status="trial",
+        active_agents=1,
+        monthly_minutes=640,
+    ),
+    Organization(
+        id="org-3",
+        name="Harbor Legal Services",
+        subscription_status="past_due",
+        active_agents=1,
+        monthly_minutes=312,
+    ),
+]
+
+AGENTS: list[Agent] = [
+    Agent(
+        id="agent-1",
+        name="Reception Concierge",
+        organization_name="Dental Clinic X",
+        model="gpt-4.1-mini",
+        voice_id="rime-serena",
+        twilio_number="+1 (415) 555-1042",
+        status="active",
+        prompt_version="v1.8",
+        average_latency_ms=742,
+    ),
+    Agent(
+        id="agent-2",
+        name="Appointment Retention",
+        organization_name="Dental Clinic X",
+        model="gpt-4.1",
+        voice_id="rime-orion",
+        twilio_number="+1 (415) 555-9880",
+        status="active",
+        prompt_version="v1.4",
+        average_latency_ms=803,
+    ),
+    Agent(
+        id="agent-3",
+        name="Lead Qualification",
+        organization_name="Prime Auto Group",
+        model="gpt-4.1-mini",
+        voice_id="rime-rhea",
+        twilio_number="+1 (646) 555-1104",
+        status="offline",
+        prompt_version="v0.9",
+        average_latency_ms=961,
+    ),
+    Agent(
+        id="agent-4",
+        name="Intake Assistant",
+        organization_name="Harbor Legal Services",
+        model="gpt-4.1-mini",
+        voice_id="rime-milo",
+        twilio_number="+1 (310) 555-2106",
+        status="error",
+        prompt_version="v1.2",
+        average_latency_ms=1314,
+    ),
+]
+
+CALL_SESSIONS: list[CallSession] = [
+    CallSession(
+        id="call-1",
+        agent_name="Reception Concierge",
+        caller_number="+1 (415) 555-7600",
+        started_at="2026-02-10 09:21",
+        duration_seconds=278,
+        status="completed",
+        sentiment="positive",
+        recording_url="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+    ),
+    CallSession(
+        id="call-2",
+        agent_name="Appointment Retention",
+        caller_number="+1 (415) 555-1100",
+        started_at="2026-02-10 08:49",
+        duration_seconds=134,
+        status="completed",
+        sentiment="neutral",
+        recording_url="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+    ),
+    CallSession(
+        id="call-3",
+        agent_name="Lead Qualification",
+        caller_number="+1 (646) 555-0044",
+        started_at="2026-02-09 17:03",
+        duration_seconds=0,
+        status="busy",
+        sentiment="neutral",
+        recording_url="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+    ),
+    CallSession(
+        id="call-4",
+        agent_name="Intake Assistant",
+        caller_number="+1 (310) 555-9002",
+        started_at="2026-02-09 16:14",
+        duration_seconds=24,
+        status="failed",
+        sentiment="negative",
+        recording_url="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+    ),
+]
+
+USAGE_BY_DAY: list[UsagePoint] = [
+    UsagePoint(day="Mon", minutes=234),
+    UsagePoint(day="Tue", minutes=318),
+    UsagePoint(day="Wed", minutes=288),
+    UsagePoint(day="Thu", minutes=352),
+    UsagePoint(day="Fri", minutes=401),
+    UsagePoint(day="Sat", minutes=162),
+    UsagePoint(day="Sun", minutes=93),
+]
+
+RECENT_SESSIONS: list[RecentSession] = [
+    RecentSession(
+        client="Acme Corp",
+        plan="Enterprise Plan",
+        agent_id="VN-AGT-01",
+        start_time="Oct 24, 10:42 AM",
+        duration="4m 32s",
+        status="Completed",
+    ),
+    RecentSession(
+        client="TechStar Inc.",
+        plan="Pro Plan",
+        agent_id="VN-AGT-09",
+        start_time="Oct 24, 10:38 AM",
+        duration="12m 10s",
+        status="Failed",
+    ),
+    RecentSession(
+        client="Globex Systems",
+        plan="Trial Plan",
+        agent_id="VN-AGT-02",
+        start_time="Oct 24, 10:35 AM",
+        duration="1m 05s",
+        status="Active",
+    ),
+    RecentSession(
+        client="Umbrella Corp",
+        plan="Enterprise Plan",
+        agent_id="VN-AGT-15",
+        start_time="Oct 24, 10:15 AM",
+        duration="8m 45s",
+        status="Completed",
+    ),
+    RecentSession(
+        client="Stark Industries",
+        plan="Pro Plan",
+        agent_id="VN-AGT-03",
+        start_time="Oct 24, 09:55 AM",
+        duration="15m 22s",
+        status="Completed",
+    ),
+]
