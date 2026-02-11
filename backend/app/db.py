@@ -64,6 +64,23 @@ class SettingsAuditRecord(Base):
     changed_fields = mapped_column(JSON, nullable=False)
 
 
+class AgentRecord(Base):
+    __tablename__ = "agents"
+
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id = mapped_column(String(64), unique=True, nullable=False)
+    name = mapped_column(String(255), nullable=False)
+    organization_name = mapped_column(String(255), nullable=False)
+    model = mapped_column(String(128), nullable=False)
+    voice_id = mapped_column(String(128), nullable=False)
+    twilio_number = mapped_column(String(64), nullable=False)
+    status = mapped_column(String(32), nullable=False)
+    prompt = mapped_column(Text, nullable=False)
+    prompt_version = mapped_column(String(64), nullable=False)
+    average_latency_ms = mapped_column(Integer, nullable=False, default=0)
+    updated_at = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class CallSessionRecord(Base):
     __tablename__ = "call_sessions"
 
@@ -127,6 +144,26 @@ def initialize_database() -> None:
                         actor=seed_entry.actor,
                         reason=seed_entry.reason,
                         changed_fields=seed_entry.changed_fields,
+                    )
+                )
+
+        agents_exist = db.query(AgentRecord).first()
+
+        if agents_exist is None:
+            for agent in mock_data.AGENTS:
+                db.add(
+                    AgentRecord(
+                        agent_id=agent.id,
+                        name=agent.name,
+                        organization_name=agent.organization_name,
+                        model=agent.model,
+                        voice_id=agent.voice_id,
+                        twilio_number=agent.twilio_number,
+                        status=agent.status,
+                        prompt=agent.prompt,
+                        prompt_version=agent.prompt_version,
+                        average_latency_ms=agent.average_latency_ms,
+                        updated_at=datetime.now(timezone.utc),
                     )
                 )
 

@@ -9,8 +9,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from backend.app.api.mock_data import AGENTS
-from backend.app.db import CallSessionRecord, PlatformSettingsRecord, get_db
+from backend.app.db import AgentRecord, CallSessionRecord, PlatformSettingsRecord, get_db
 
 router = APIRouter(prefix="/twilio", tags=["twilio"])
 AUDIO_CACHE_TTL_MINUTES = 20
@@ -30,15 +29,27 @@ def _normalize_phone(value: str) -> str:
     return "".join(char for char in value if char.isdigit())
 
 
-def _match_agent_by_number(to_number: str):
+def _load_agents(db: Session) -> list[AgentRecord]:
+    return db.query(AgentRecord).order_by(AgentRecord.id.asc()).all()
+
+
+def _match_agent_by_number(db: Session, to_number: str) -> AgentRecord:
+    agents = _load_agents(db)
+
+    if not agents:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No agents configured",
+        )
+
     normalized_to = _normalize_phone(to_number)
 
-    for agent in AGENTS:
+    for agent in agents:
         if _normalize_phone(agent.twilio_number) == normalized_to:
             return agent
 
-    first_active = next((agent for agent in AGENTS if agent.status == "active"), None)
-    return first_active if first_active else AGENTS[0]
+    first_active = next((agent for agent in agents if agent.status == "active"), None)
+    return first_active if first_active else agents[0]
 
 
 def _twilio_status_to_domain(call_status: str) -> str:
@@ -271,7 +282,7 @@ def inbound_voice_webhook(
     to_number: str = Form(alias="To"),
     db: Session = Depends(get_db),
 ) -> Response:
-    agent = _match_agent_by_number(to_number)
+    agent = _match_agent_by_number(db, to_number)
     existing = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
 
     if existing is None:
@@ -366,7 +377,7 @@ def voice_gather_webhook(
             CallSessionRecord(
                 call_id=_next_call_id(db),
                 call_sid=call_sid,
-                agent_name=_match_agent_by_number(to_number).name,
+                agent_name=_match_agent_by_number(db, to_number).name,
                 caller_number=from_number,
                 started_at=datetime.now(timezone.utc),
                 duration_seconds=0,
@@ -379,7 +390,7 @@ def voice_gather_webhook(
         db.commit()
         existing = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
 
-    agent = _match_agent_by_number(to_number)
+    agent = _match_agent_by_number(db, to_number)
     platform_settings = _load_platform_settings(db)
     reply_text = _generate_reply_text(
         agent_name=agent.name,
