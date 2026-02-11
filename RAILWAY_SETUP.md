@@ -89,7 +89,8 @@ https://<api-url>/api/twilio/status
 
 5. Status callback events: at least `completed`, `answered`, `busy`, `failed`, `no-answer`.
 
-`/api/twilio/voice` now asks caller to leave a short message and records it. The recording URL is stored by `/api/twilio/recording` automatically via TwiML callback.
+`/api/twilio/voice` now greets the caller (prompt + selected voice), captures one speech turn via `/api/twilio/gather`, and then ends the call.
+Optional recording callbacks are still accepted via `/api/twilio/recording`.
 
 Then place a call to the Twilio number and verify on web:
 

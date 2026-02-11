@@ -106,7 +106,7 @@ def _load_platform_settings(db: Session) -> Optional[PlatformSettingsRecord]:
 def _generate_greeting_text(agent_name: str, caller_number: str, prompt: str, model: str, openai_api_key: str) -> str:
     fallback = (
         f"Hello, this is {agent_name}. Thanks for calling. "
-        "After the beep, please leave a short message so we can follow up quickly."
+        "How can I help you today?"
     )
 
     safe_key = _normalize_secret(openai_api_key)
@@ -116,7 +116,7 @@ def _generate_greeting_text(agent_name: str, caller_number: str, prompt: str, mo
 
     user_prompt = (
         "Generate one concise spoken greeting for an inbound phone call. "
-        "It must be no more than 2 short sentences and should ask the caller to leave a brief message after the beep. "
+        "It must be no more than 2 short sentences and should invite the caller to explain what they need. "
         f"Caller number: {caller_number}."
     )
 
@@ -137,6 +137,62 @@ def _generate_greeting_text(agent_name: str, caller_number: str, prompt: str, mo
                     ],
                     "temperature": 0.4,
                     "max_tokens": 80,
+                },
+            )
+
+        response.raise_for_status()
+        payload = response.json()
+        content = (
+            payload.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        return content or fallback
+    except Exception:
+        return fallback
+
+
+def _generate_reply_text(agent_name: str, caller_text: str, prompt: str, model: str, openai_api_key: str) -> str:
+    normalized_caller_text = caller_text.strip()
+
+    if not normalized_caller_text:
+        return "I did not catch that clearly. Could you call again so I can assist you better?"
+
+    fallback = (
+        f"Thanks for sharing. I understood that you said: {normalized_caller_text[:80]}. "
+        "I will pass this to the team so they can follow up quickly."
+    )
+
+    safe_key = _normalize_secret(openai_api_key)
+
+    if not safe_key:
+        return fallback
+
+    user_prompt = (
+        "Respond as a phone assistant in at most 2 concise sentences. "
+        "Acknowledge the caller request and give a clear next step. "
+        f"Caller message: {normalized_caller_text}"
+    )
+
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            response = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {safe_key}",
+                    "X-API-Key": safe_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model or "gpt-4.1-mini",
+                    "messages": [
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.4,
+                    "max_tokens": 120,
                 },
             )
 
@@ -235,8 +291,7 @@ def inbound_voice_webhook(
         )
         db.commit()
 
-    recording_callback_url = _public_url_for(request, "recording_status_webhook")
-    voice_finish_url = _public_url_for(request, "voice_finish_webhook")
+    gather_url = _public_url_for(request, "voice_gather_webhook")
     platform_settings = _load_platform_settings(db)
 
     greeting_text = _generate_greeting_text(
@@ -266,9 +321,10 @@ def inbound_voice_webhook(
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
         f"{intro}"
-        "<Say voice=\"alice\">After the beep, leave a short message so we can verify recording and call flow.</Say>"
-        f"<Record playBeep=\"true\" timeout=\"4\" maxLength=\"120\" action=\"{voice_finish_url}\" method=\"POST\" recordingStatusCallback=\"{recording_callback_url}\" recordingStatusCallbackMethod=\"POST\"/>"
-        "<Say voice=\"alice\">We did not receive audio. Goodbye.</Say>"
+        f"<Gather input=\"speech\" speechTimeout=\"auto\" timeout=\"4\" action=\"{gather_url}\" method=\"POST\">"
+        "<Say voice=\"alice\">Please tell me how I can help.</Say>"
+        "</Gather>"
+        "<Say voice=\"alice\">I did not hear anything. Goodbye.</Say>"
         "<Hangup/>"
         "</Response>"
     )
@@ -291,6 +347,80 @@ def twilio_audio_file(audio_id: str) -> Response:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio not found")
 
     return Response(content=bytes(audio_bytes), media_type=str(media_type))
+
+
+@router.post("/gather", name="voice_gather_webhook")
+def voice_gather_webhook(
+    request: Request,
+    call_sid: str = Form(alias="CallSid"),
+    from_number: str = Form(alias="From"),
+    to_number: str = Form(alias="To"),
+    speech_result: str = Form(default="", alias="SpeechResult"),
+    db: Session = Depends(get_db),
+) -> Response:
+    voice_finish_url = _public_url_for(request, "voice_finish_webhook")
+    existing = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
+
+    if existing is None:
+        db.add(
+            CallSessionRecord(
+                call_id=_next_call_id(db),
+                call_sid=call_sid,
+                agent_name=_match_agent_by_number(to_number).name,
+                caller_number=from_number,
+                started_at=datetime.now(timezone.utc),
+                duration_seconds=0,
+                status="busy",
+                sentiment="neutral",
+                recording_url="",
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+        existing = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
+
+    agent = _match_agent_by_number(to_number)
+    platform_settings = _load_platform_settings(db)
+    reply_text = _generate_reply_text(
+        agent_name=agent.name,
+        caller_text=speech_result,
+        prompt=agent.prompt,
+        model=agent.model,
+        openai_api_key=platform_settings.openai_api_key if platform_settings else "",
+    )
+    audio_blob = _synthesize_rime_audio(
+        text=reply_text,
+        voice_name=_resolve_voice_name(agent.voice_id),
+        rime_api_key=platform_settings.rime_api_key if platform_settings else "",
+    )
+
+    if existing is not None:
+        existing.sentiment = "positive" if speech_result.strip() else "neutral"
+        existing.updated_at = datetime.now(timezone.utc)
+        db.add(existing)
+        db.commit()
+
+    if audio_blob:
+        audio_bytes, media_type = audio_blob
+        audio_id = _store_audio_blob(audio_bytes, media_type)
+        audio_url = _public_url_for(request, "twilio_audio_file", audio_id=audio_id)
+        body = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            f"<Play>{audio_url}</Play>"
+            f"<Redirect method=\"POST\">{voice_finish_url}</Redirect>"
+            "</Response>"
+        )
+        return Response(content=body, media_type="application/xml")
+
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        f"<Say voice=\"alice\">{escape(reply_text)}</Say>"
+        f"<Redirect method=\"POST\">{voice_finish_url}</Redirect>"
+        "</Response>"
+    )
+    return Response(content=body, media_type="application/xml")
 
 
 @router.post("/voice-finish", name="voice_finish_webhook")

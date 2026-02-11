@@ -33,6 +33,7 @@ Current API routes under `/api`:
 - `GET /api/settings/history`
 - `GET /api/settings/history/meta`
 - `POST /api/twilio/voice`
+- `POST /api/twilio/gather`
 - `POST /api/twilio/voice-finish`
 - `POST /api/twilio/recording`
 - `POST /api/twilio/status`
@@ -50,7 +51,7 @@ Notes:
 - Cross-origin access is controlled by `CORS_ALLOW_ORIGINS`.
 - Railway deployment guide: `RAILWAY_SETUP.md`.
 - Recommended Railway API builder: Dockerfile (`Dockerfile.api`).
-- Twilio inbound webhook flow stores incoming calls in `call_sessions` and updates status via status callback.
+- Twilio inbound webhook flow stores incoming calls in `call_sessions`, handles one speech turn via `/twilio/gather`, and updates final status via callback.
 
 Quick check:
 

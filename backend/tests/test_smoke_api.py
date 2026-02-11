@@ -181,12 +181,38 @@ def test_twilio_voice_webhook_creates_call_session() -> None:
 
     assert response.status_code == 200
     assert "<Response>" in response.text
-    assert "<Record" in response.text
+    assert "<Gather" in response.text
 
     with SessionLocal() as db:
         created = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
         assert created is not None
         assert created.caller_number == "+14155559000"
+
+
+def test_twilio_gather_webhook_returns_assistant_response() -> None:
+    call_sid = f"CA-test-{uuid4().hex[:12]}"
+    voice_response = client.post(
+        "/api/twilio/voice",
+        data={
+            "CallSid": call_sid,
+            "From": "+14155550333",
+            "To": "+14155551042",
+        },
+    )
+    assert voice_response.status_code == 200
+
+    gather_response = client.post(
+        "/api/twilio/gather",
+        data={
+            "CallSid": call_sid,
+            "From": "+14155550333",
+            "To": "+14155551042",
+            "SpeechResult": "I want to order two pizzas for delivery tonight",
+        },
+    )
+    assert gather_response.status_code == 200
+    assert "<Response>" in gather_response.text
+    assert "<Redirect" in gather_response.text
 
 
 def test_twilio_recording_webhook_updates_recording_url() -> None:
