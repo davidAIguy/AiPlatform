@@ -33,6 +33,8 @@ Current API routes under `/api`:
 - `GET /api/settings/history`
 - `GET /api/settings/history/meta`
 - `POST /api/twilio/voice`
+- `POST /api/twilio/voice-finish`
+- `POST /api/twilio/recording`
 - `POST /api/twilio/status`
 
 Notes:

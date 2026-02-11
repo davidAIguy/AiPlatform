@@ -181,11 +181,42 @@ def test_twilio_voice_webhook_creates_call_session() -> None:
 
     assert response.status_code == 200
     assert "<Response>" in response.text
+    assert "<Record" in response.text
 
     with SessionLocal() as db:
         created = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
         assert created is not None
         assert created.caller_number == "+14155559000"
+
+
+def test_twilio_recording_webhook_updates_recording_url() -> None:
+    call_sid = f"CA-test-{uuid4().hex[:12]}"
+    voice_response = client.post(
+        "/api/twilio/voice",
+        data={
+            "CallSid": call_sid,
+            "From": "+14155550222",
+            "To": "+14155551042",
+        },
+    )
+    assert voice_response.status_code == 200
+
+    recording_response = client.post(
+        "/api/twilio/recording",
+        data={
+            "CallSid": call_sid,
+            "RecordingUrl": "https://example.com/recordings/test-recording.wav",
+            "RecordingDuration": "14",
+        },
+    )
+    assert recording_response.status_code == 200
+    assert recording_response.json()["status"] == "ok"
+
+    with SessionLocal() as db:
+        updated = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
+        assert updated is not None
+        assert updated.recording_url == "https://example.com/recordings/test-recording.wav"
+        assert updated.duration_seconds >= 14
 
 
 def test_twilio_status_webhook_updates_existing_call() -> None:
@@ -399,7 +430,11 @@ def test_update_settings_endpoint() -> None:
     next_auto_retry = not current_settings["allowAutoRetryOnFailedCalls"]
     next_latency_filler = not current_settings["playLatencyFillerPhraseOnTimeout"]
 
-    before_response = client.get("/api/settings/history", headers=admin_headers)
+    before_response = client.get(
+        "/api/settings/history",
+        params={"limit": 100},
+        headers=admin_headers,
+    )
     assert before_response.status_code == 200
     before_entries = before_response.json()
 
@@ -419,7 +454,11 @@ def test_update_settings_endpoint() -> None:
     assert settings["allowAutoRetryOnFailedCalls"] is next_auto_retry
     assert settings["playLatencyFillerPhraseOnTimeout"] is next_latency_filler
 
-    after_response = client.get("/api/settings/history", headers=admin_headers)
+    after_response = client.get(
+        "/api/settings/history",
+        params={"limit": 100},
+        headers=admin_headers,
+    )
     assert after_response.status_code == 200
     after_entries = after_response.json()
     assert len(after_entries) == len(before_entries) + 1
@@ -438,7 +477,11 @@ def test_update_settings_without_changes_does_not_append_history() -> None:
     assert baseline_response.status_code == 200
     baseline_settings = baseline_response.json()
 
-    before_history_response = client.get("/api/settings/history", headers=admin_headers)
+    before_history_response = client.get(
+        "/api/settings/history",
+        params={"limit": 100},
+        headers=admin_headers,
+    )
     assert before_history_response.status_code == 200
     before_entries = before_history_response.json()
 
@@ -453,7 +496,11 @@ def test_update_settings_without_changes_does_not_append_history() -> None:
     )
     assert update_response.status_code == 200
 
-    after_history_response = client.get("/api/settings/history", headers=admin_headers)
+    after_history_response = client.get(
+        "/api/settings/history",
+        params={"limit": 100},
+        headers=admin_headers,
+    )
     assert after_history_response.status_code == 200
     after_entries = after_history_response.json()
 

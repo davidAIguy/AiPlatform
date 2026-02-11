@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Form, Response
+from fastapi import APIRouter, Depends, Form, Request, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -47,6 +47,7 @@ def _next_call_id(db: Session) -> str:
 
 @router.post("/voice")
 def inbound_voice_webhook(
+    request: Request,
     call_sid: str = Form(alias="CallSid"),
     from_number: str = Form(alias="From"),
     to_number: str = Form(alias="To"),
@@ -71,17 +72,62 @@ def inbound_voice_webhook(
         )
         db.commit()
 
+    recording_callback_url = str(request.url_for("recording_status_webhook"))
+    voice_finish_url = str(request.url_for("voice_finish_webhook"))
+
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
         "<Say voice=\"alice\">Thanks for calling. This staging line is active and your call has been logged.</Say>"
-        "<Pause length=\"1\"/>"
-        "<Say voice=\"alice\">Goodbye.</Say>"
+        "<Say voice=\"alice\">After the beep, leave a short message so we can verify recording and call flow.</Say>"
+        f"<Record playBeep=\"true\" timeout=\"4\" maxLength=\"120\" action=\"{voice_finish_url}\" method=\"POST\" recordingStatusCallback=\"{recording_callback_url}\" recordingStatusCallbackMethod=\"POST\"/>"
+        "<Say voice=\"alice\">We did not receive audio. Goodbye.</Say>"
         "<Hangup/>"
         "</Response>"
     )
 
     return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/voice-finish", name="voice_finish_webhook")
+def voice_finish_webhook() -> Response:
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        "<Say voice=\"alice\">Thank you. Your message was recorded successfully. Goodbye.</Say>"
+        "<Hangup/>"
+        "</Response>"
+    )
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/recording", name="recording_status_webhook")
+def recording_status_webhook(
+    call_sid: str = Form(alias="CallSid"),
+    recording_url: str = Form(default="", alias="RecordingUrl"),
+    recording_duration: str = Form(default="0", alias="RecordingDuration"),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    existing = db.query(CallSessionRecord).filter(CallSessionRecord.call_sid == call_sid).first()
+
+    if existing is None:
+        return {"status": "ignored", "reason": "unknown call sid"}
+
+    if recording_url.strip():
+        existing.recording_url = recording_url.strip()
+
+    try:
+        duration = int(recording_duration)
+    except ValueError:
+        duration = existing.duration_seconds
+
+    existing.duration_seconds = max(duration, existing.duration_seconds)
+    existing.updated_at = datetime.now(timezone.utc)
+    db.add(existing)
+    db.commit()
+
+    return {"status": "ok"}
 
 
 @router.post("/status")
