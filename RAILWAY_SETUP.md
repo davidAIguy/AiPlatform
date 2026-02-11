@@ -14,19 +14,13 @@ This project can be deployed to Railway with two services:
 
 ## 2) Configure `api` service
 
-Use these commands in service settings:
+Recommended: use Dockerfile build for API to avoid monorepo auto-detection issues.
 
-- Build command:
+In service settings:
 
-```bash
-pip install -r backend/requirements.txt
-```
-
-- Start command:
-
-```bash
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
-```
+1. Builder: **Dockerfile**
+2. Dockerfile path: `Dockerfile.api`
+3. Leave build/start commands empty when using Dockerfile builder.
 
 Required variables:
 

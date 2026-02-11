@@ -45,6 +45,7 @@ Notes:
 - Settings history metadata endpoint returns available actors/fields plus totals for richer filter UIs.
 - Cross-origin access is controlled by `CORS_ALLOW_ORIGINS`.
 - Railway deployment guide: `RAILWAY_SETUP.md`.
+- Recommended Railway API builder: Dockerfile (`Dockerfile.api`).
 
 Quick check:
 
