@@ -241,6 +241,17 @@ def test_settings_history_filters_by_actor_and_date() -> None:
     date_entries = date_filtered_response.json()
     assert any(entry["id"] == anchor_entry["id"] for entry in date_entries)
 
+    paged_response = client.get(
+        "/api/settings/history",
+        params={
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+    assert paged_response.status_code == 200
+    paged_entries = paged_response.json()
+    assert len(paged_entries) <= 1
+
 
 def test_settings_history_rejects_invalid_date_range() -> None:
     response = client.get(

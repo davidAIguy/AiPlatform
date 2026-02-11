@@ -37,7 +37,7 @@ Notes:
 - Settings keys are validated on update (`sk-` OpenAI, `dg-` Deepgram, `AC` Twilio SID, `rm-` Rime).
 - Settings history is tracked in-memory with changed field names and timestamp.
 - Settings updates can include `auditActor` and `changeReason`, which are stored in history.
-- Settings history supports filters via query params: `actor`, `fromDate`, `toDate`, and `changedField`.
+- Settings history supports pagination/filter query params: `limit`, `offset`, `actor`, `fromDate`, `toDate`, and `changedField`.
 
 Quick check:
 

@@ -26,6 +26,7 @@ const DEEPGRAM_KEY_PATTERN = /^dg-[A-Za-z0-9*._-]{8,}$/;
 const TWILIO_SID_PATTERN = /^AC[A-Za-z0-9*]{10,}$/;
 const RIME_KEY_PATTERN = /^rm-[A-Za-z0-9*._-]{8,}$/;
 const HISTORY_LIMIT = 8;
+const HISTORY_FETCH_LIMIT = HISTORY_LIMIT + 1;
 const DEFAULT_AUDIT_ACTOR = 'platform-admin';
 
 function toRangeStart(value: string): string {
@@ -86,6 +87,8 @@ export function SettingsPage() {
   const [historyFieldFilter, setHistoryFieldFilter] = useState('all');
   const [historyFromDate, setHistoryFromDate] = useState('');
   const [historyToDate, setHistoryToDate] = useState('');
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyHasNextPage, setHistoryHasNextPage] = useState(false);
 
   const validationErrors = useMemo(() => validateSettingsKeys(settings), [settings]);
   const hasValidationErrors = useMemo(
@@ -150,6 +153,7 @@ export function SettingsPage() {
     async function loadHistory() {
       if (invalidHistoryDateRange) {
         setHistory([]);
+        setHistoryHasNextPage(false);
         setHistoryError('From date must be before or equal to To date.');
         setHistoryLoading(false);
         return;
@@ -160,7 +164,8 @@ export function SettingsPage() {
 
       try {
         const nextHistory = await listPlatformSettingsHistory({
-          limit: HISTORY_LIMIT,
+          limit: HISTORY_FETCH_LIMIT,
+          offset: historyPage * HISTORY_LIMIT,
           actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
           changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
           fromDate: historyFromDate ? toRangeStart(historyFromDate) : undefined,
@@ -171,7 +176,8 @@ export function SettingsPage() {
           return;
         }
 
-        setHistory(nextHistory);
+        setHistory(nextHistory.slice(0, HISTORY_LIMIT));
+        setHistoryHasNextPage(nextHistory.length > HISTORY_LIMIT);
       } catch (error) {
         if (!active) {
           return;
@@ -179,6 +185,8 @@ export function SettingsPage() {
 
         const message = error instanceof Error ? error.message : 'Unexpected error while loading settings history.';
         setHistoryError(message);
+        setHistory([]);
+        setHistoryHasNextPage(false);
       } finally {
         if (active) {
           setHistoryLoading(false);
@@ -191,7 +199,7 @@ export function SettingsPage() {
     return () => {
       active = false;
     };
-  }, [reloadToken, historyActorFilter, historyFieldFilter, historyFromDate, historyToDate, invalidHistoryDateRange]);
+  }, [reloadToken, historyActorFilter, historyFieldFilter, historyFromDate, historyToDate, invalidHistoryDateRange, historyPage]);
 
   const integrationRows = useMemo(() => {
     if (!settings) {
@@ -262,14 +270,17 @@ export function SettingsPage() {
         changeReason: changeReason.trim() || undefined,
       });
       const updatedHistory = await listPlatformSettingsHistory({
-        limit: HISTORY_LIMIT,
+        limit: HISTORY_FETCH_LIMIT,
+        offset: 0,
         actor: historyActorFilter === 'all' ? undefined : historyActorFilter,
         changedField: historyFieldFilter === 'all' ? undefined : historyFieldFilter,
         fromDate: invalidHistoryDateRange || !historyFromDate ? undefined : toRangeStart(historyFromDate),
         toDate: invalidHistoryDateRange || !historyToDate ? undefined : toRangeEnd(historyToDate),
       });
       setSettings(updated);
-      setHistory(updatedHistory);
+      setHistory(updatedHistory.slice(0, HISTORY_LIMIT));
+      setHistoryHasNextPage(updatedHistory.length > HISTORY_LIMIT);
+      setHistoryPage(0);
       setHistoryError(null);
       setSaveSuccess('Platform settings saved successfully.');
       setChangeReason('');
@@ -466,7 +477,10 @@ export function SettingsPage() {
                       size="small"
                       label="Actor"
                       value={historyActorFilter}
-                      onChange={(event) => setHistoryActorFilter(event.target.value)}
+                      onChange={(event) => {
+                        setHistoryActorFilter(event.target.value);
+                        setHistoryPage(0);
+                      }}
                       sx={{ minWidth: 170 }}
                     >
                       <MenuItem value="all">All Actors</MenuItem>
@@ -482,7 +496,10 @@ export function SettingsPage() {
                       size="small"
                       label="Field"
                       value={historyFieldFilter}
-                      onChange={(event) => setHistoryFieldFilter(event.target.value)}
+                      onChange={(event) => {
+                        setHistoryFieldFilter(event.target.value);
+                        setHistoryPage(0);
+                      }}
                       sx={{ minWidth: 190 }}
                     >
                       <MenuItem value="all">All Fields</MenuItem>
@@ -498,7 +515,10 @@ export function SettingsPage() {
                       type="date"
                       label="From"
                       value={historyFromDate}
-                      onChange={(event) => setHistoryFromDate(event.target.value)}
+                      onChange={(event) => {
+                        setHistoryFromDate(event.target.value);
+                        setHistoryPage(0);
+                      }}
                       InputLabelProps={{ shrink: true }}
                     />
 
@@ -507,7 +527,10 @@ export function SettingsPage() {
                       type="date"
                       label="To"
                       value={historyToDate}
-                      onChange={(event) => setHistoryToDate(event.target.value)}
+                      onChange={(event) => {
+                        setHistoryToDate(event.target.value);
+                        setHistoryPage(0);
+                      }}
                       InputLabelProps={{ shrink: true }}
                     />
 
@@ -519,10 +542,37 @@ export function SettingsPage() {
                         setHistoryFieldFilter('all');
                         setHistoryFromDate('');
                         setHistoryToDate('');
+                        setHistoryPage(0);
                       }}
                     >
                       Clear
                     </Button>
+                  </Stack>
+
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      Page {historyPage + 1}
+                    </Typography>
+
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={historyPage === 0 || historyLoading}
+                        onClick={() => setHistoryPage((current) => Math.max(current - 1, 0))}
+                      >
+                        Previous
+                      </Button>
+
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={!historyHasNextPage || historyLoading || invalidHistoryDateRange}
+                        onClick={() => setHistoryPage((current) => current + 1)}
+                      >
+                        Next
+                      </Button>
+                    </Stack>
                   </Stack>
 
                   {historyLoading ? (

@@ -141,6 +141,7 @@ export function updatePlatformSettings(payload: PlatformSettingsUpdateInput) {
 
 export function listPlatformSettingsHistory(filters?: {
   limit?: number;
+  offset?: number;
   actor?: string;
   fromDate?: string;
   toDate?: string;
@@ -149,6 +150,10 @@ export function listPlatformSettingsHistory(filters?: {
   const params = new URLSearchParams();
 
   params.set('limit', String(filters?.limit ?? 20));
+
+  if (typeof filters?.offset === 'number') {
+    params.set('offset', String(filters.offset));
+  }
 
   if (filters?.actor) {
     params.set('actor', filters.actor);

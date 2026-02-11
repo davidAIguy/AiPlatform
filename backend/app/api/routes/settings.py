@@ -43,6 +43,7 @@ def get_platform_settings() -> PlatformSettings:
 @router.get("/history", response_model=list[PlatformSettingsAuditEntry])
 def get_platform_settings_history(
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     actor: Optional[str] = Query(default=None),
     from_date: Optional[str] = Query(default=None, alias="fromDate"),
     to_date: Optional[str] = Query(default=None, alias="toDate"),
@@ -81,7 +82,7 @@ def get_platform_settings_history(
 
         entries.append(entry)
 
-    return entries[:limit]
+    return entries[offset : offset + limit]
 
 
 @router.patch("", response_model=PlatformSettings)
