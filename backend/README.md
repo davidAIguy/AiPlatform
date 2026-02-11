@@ -17,7 +17,7 @@ curl http://localhost:8000/health
 
 ## Scaffolded API routes
 
-All domain endpoints are currently in-memory scaffolds under `/api`:
+Current API routes under `/api`:
 
 - `GET /api/organizations`
 - `POST /api/auth/login`
@@ -43,6 +43,8 @@ Notes:
 - Settings updates can include `auditActor` and `changeReason`, which are stored in history.
 - Settings history supports pagination/filter query params: `limit`, `offset`, `actor`, `fromDate`, `toDate`, and `changedField`.
 - Settings history metadata endpoint returns available actors/fields plus totals for richer filter UIs.
+- Cross-origin access is controlled by `CORS_ALLOW_ORIGINS`.
+- Railway deployment guide: `RAILWAY_SETUP.md`.
 
 Quick check:
 

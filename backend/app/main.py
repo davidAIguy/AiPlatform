@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.routes import (
     agents_router,
@@ -26,6 +27,16 @@ app = FastAPI(
     title=settings.app_name,
     debug=settings.debug,
     lifespan=lifespan,
+)
+
+cors_origins = settings.parsed_cors_origins()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if "*" in cors_origins else cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router)

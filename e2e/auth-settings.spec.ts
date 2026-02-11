@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test.describe.configure({ mode: 'serial' });
+
 async function login(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel('Work Email').fill(email);
@@ -14,7 +16,9 @@ test('admin can log in and save platform settings', async ({ page }) => {
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: 'Platform Settings' })).toBeVisible();
 
+  const actor = `e2e-admin-${Date.now()}`;
   const reason = `e2e validation ${Date.now()}`;
+  await page.getByLabel('Audit Actor').fill(actor);
   await page.getByLabel('Allow auto-retry on failed calls').click();
   await page.getByLabel('Change Reason (optional)').fill(reason);
 
@@ -23,7 +27,7 @@ test('admin can log in and save platform settings', async ({ page }) => {
   await saveButton.click();
 
   await expect(page.getByText('Platform settings saved successfully.')).toBeVisible();
-  await expect(page.getByText(reason)).toBeVisible();
+  await expect(page.getByText(actor)).toBeVisible();
 });
 
 test('viewer is read-only on platform settings', async ({ page }) => {
